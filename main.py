@@ -6,5 +6,5 @@ if __name__ == "__main__":
     app = ImageViewerApp(root)
     root.mainloop()
 
-    # C:\Users\周星辰\Pictures\20260728-144726.png
-    # C:\Users\周星辰\Pictures\20260728-144716.png
+    # D:\Code\Python\给star\yelu-od\00350_20240103001_叶露_OD_2024-01-03_09-05-09_ONH Angio 6x6 512x512 R4_11.0599
+    # D:\Code\Python\给star\yelu-od\0036_yeluod_overlay_5pts_副本.png
