@@ -1,6 +1,7 @@
 import tkinter as tk
 from tkinter import messagebox
 from PIL import Image, ImageTk, ImageDraw, ImageFont
+import re
 import os
 import glob
 
@@ -72,7 +73,7 @@ class ImageViewerApp:
 
         load_btn2 = tk.Button(
             row2,
-            text="加载Angio + B-scan",
+            text="加载数据图片",
             font=("微软雅黑", 9),
             command=lambda: self.load_image("both"),
             bg="#2196F3",
@@ -97,7 +98,7 @@ class ImageViewerApp:
         display_frame.pack(fill=tk.BOTH, expand=True, padx=10, pady=10)
 
         # 上方图片显示
-        top_frame = tk.LabelFrame(display_frame, text="Angio图像 (512x512) - 点击选择坐标", font=("微软雅黑", 10),
+        top_frame = tk.LabelFrame(display_frame, text="上方图片 - 点击选择坐标", font=("微软雅黑", 10),
                                   padx=5, pady=5)
         top_frame.pack(fill=tk.BOTH, expand=True, pady=(0, 5))
 
@@ -108,7 +109,7 @@ class ImageViewerApp:
         self.top_image_label.bind("<Button-1>", self.on_top_image_click)
 
         # 下方图片显示
-        bottom_frame = tk.LabelFrame(display_frame, text="B-scan图像 (512x1920 滚动预览)", font=("微软雅黑", 10),
+        bottom_frame = tk.LabelFrame(display_frame, text="下方图片", font=("微软雅黑", 10),
                                      padx=5, pady=5)
         bottom_frame.pack(fill=tk.BOTH, expand=True)
 
@@ -149,18 +150,15 @@ class ImageViewerApp:
         self.bottom_line_photo = None
 
     def on_bottom_container_configure(self, event):
-        """当容器大小变化时更新Canvas滚动区域"""
         self.bottom_canvas.configure(scrollregion=self.bottom_canvas.bbox("all"))
 
     def on_bottom_canvas_configure(self, event):
-        """当Canvas大小变化时调整内容宽度"""
         self.bottom_canvas.itemconfig(self.bottom_canvas_window, width=event.width)
         self.update_bottom_display()
         if self.current_x is not None:
             self.draw_bottom_line(self.current_x)
 
     def show_placeholders(self):
-        """显示占位图"""
         # 上方占位图
         top_placeholder = Image.new("RGB", (512, 512), (240, 240, 240))
         draw = ImageDraw.Draw(top_placeholder)
@@ -169,7 +167,7 @@ class ImageViewerApp:
         except:
             font = ImageFont.load_default()
 
-        text = "📷 请加载上方图片\n512 x 512\n(点击选择坐标)"
+        text = ""
         bbox = draw.textbbox((0, 0), text, font=font)
         text_width = bbox[2] - bbox[0]
         text_height = bbox[3] - bbox[1]
@@ -181,11 +179,10 @@ class ImageViewerApp:
         self.top_image_label.config(image=self.top_placeholder_photo)
         self.top_image_label.image = self.top_placeholder_photo
 
-        # 下方占位图
         bottom_placeholder = Image.new("RGB", (512, 512), (245, 245, 245))
         draw = ImageDraw.Draw(bottom_placeholder)
 
-        text = "📷 请加载B-scan文件夹\n512 x 1920\n(可滚动查看)"
+        text = ""
         bbox = draw.textbbox((0, 0), text, font=font)
         text_width = bbox[2] - bbox[0]
         text_height = bbox[3] - bbox[1]
@@ -200,68 +197,52 @@ class ImageViewerApp:
         self.bottom_canvas.configure(scrollregion=self.bottom_canvas.bbox("all"))
 
     def on_top_image_click(self, event):
-        """处理上方图片的点击事件"""
         if self.top_image is None:
             return
 
-        # 获取点击位置
         x = event.x
         y = event.y
 
-        # 获取标签的实际大小
         label_width = self.top_image_label.winfo_width()
         label_height = self.top_image_label.winfo_height()
 
-        # 计算图片在标签中的实际显示位置和大小
         img_width = self.top_display_width
         img_height = self.top_display_height
 
-        # 计算居中偏移
         offset_x = (label_width - img_width) // 2
         offset_y = (label_height - img_height) // 2
 
-        # 计算点击在图片上的实际坐标
         img_x = x - offset_x
         img_y = y - offset_y
 
-        # 检查点击是否在图片范围内
         if img_x < 0 or img_x >= img_width or img_y < 0 or img_y >= img_height:
             return
 
-        # 将坐标映射到512x512的原始图片坐标
         original_x = int((img_x / img_width) * 512)
         original_y = int((img_y / img_height) * 512)
 
-        # 确保坐标在[1, 512]范围内
         original_x = max(1, min(512, original_x))
         original_y = max(1, min(512, original_y))
 
-        # 更新当前选择的坐标
         self.current_x = original_x
         self.current_y = original_y
 
-        # 更新窗口标题
         self.root.title(f"Tomography Point Picker - X={original_x}, Y={original_y}")
 
-        # 绘制十字准星
         self.draw_crosshair(original_x, original_y)
 
-        # 根据y值切换下方B-scan图片
         self.switch_bottom_image_by_y(original_y)
 
     def draw_crosshair(self, x_coord, y_coord):
-        """在上方图片绘制十字准星"""
         if self.top_image is None:
             return
 
         img_copy = self.top_image.copy()
         draw = ImageDraw.Draw(img_copy)
 
-        # 绿色竖线
         line_x = x_coord - 1
         draw.line([(line_x, 0), (line_x, 511)], fill=(0, 255, 0), width=2)
 
-        # 红色横线
         line_y = y_coord - 1
         draw.line([(0, line_y), (511, line_y)], fill=(255, 0, 0), width=2)
 
@@ -269,11 +250,9 @@ class ImageViewerApp:
         self.top_image_label.config(image=self.top_line_photo)
         self.top_image_label.image = self.top_line_photo
 
-        # 在下方图片绘制绿色竖线
         self.draw_bottom_line(x_coord)
 
     def draw_bottom_line(self, x_coord):
-        """在下方图片绘制绿色竖线"""
         if self.bottom_image is None:
             return
 
@@ -312,14 +291,11 @@ class ImageViewerApp:
         self.bottom_canvas.configure(scrollregion=self.bottom_canvas.bbox("all"))
 
     def switch_bottom_image_by_y(self, y_coord):
-        """根据y值切换下方B-scan图片（y值1-512对应第1-512张）"""
         if not self.bottom_image_paths:
             return
 
-        # y值范围是1-512，对应索引0-511
         index = y_coord - 1
 
-        # 确保索引在有效范围内
         if index < 0 or index >= len(self.bottom_image_paths):
             return
 
@@ -327,12 +303,10 @@ class ImageViewerApp:
             image_path = self.bottom_image_paths[index]
             original_image = Image.open(image_path)
 
-            # 调整到512x1920
             resized_image, _ = self.resize_and_center_with_info(original_image, (512, 1920))
             self.bottom_image = resized_image
 
-            # 更新信息标签
-            self.info_label.config(text=f"B-scan: {index + 1}/{len(self.bottom_image_paths)} (Y={y_coord})",
+            self.info_label.config(text=f"图片{index + 1}/{len(self.bottom_image_paths)} (Y={y_coord})",
                                    fg="#2196F3")
 
             # 如果有x坐标，绘制绿线
@@ -351,12 +325,16 @@ class ImageViewerApp:
             self.bottom_canvas.yview_moveto(0)
 
         except Exception as e:
-            messagebox.showerror("错误", f"加载B-scan图片失败：\n{str(e)}")
+            messagebox.showerror("错误", f"加载图片失败：\n{str(e)}")
+
+    def sort_by_number(self, filename):
+        match = re.search(r'_(\d+)\.png$', filename)
+        if match:
+            return int(match.group(1))
+        return 0
 
     def load_image(self, mode):
-        """加载图片"""
         if mode == "top_only":
-            # 仅加载上方图片（直接传入图片路径）
             image_path = self.url_entry_top.get().strip()
 
             if not image_path:
@@ -435,13 +413,11 @@ class ImageViewerApp:
                     messagebox.showerror("错误", f"B-scan_PixelRatio文件夹中没有png图片：\n{bscan_path}")
                     return
 
-                self.bottom_image_paths = png_files
+                self.bottom_image_paths = sorted(png_files, key=self.sort_by_number)
 
-                # 如果已经有y值，切换到对应的图片
                 if self.current_y is not None:
                     self.switch_bottom_image_by_y(self.current_y)
                 else:
-                    # 默认显示第一张
                     self.switch_bottom_image_by_y(1)
 
                 self.root.title(f"Tomography Point Picker - Angio + B-scan已加载 ({len(png_files)}张)")
