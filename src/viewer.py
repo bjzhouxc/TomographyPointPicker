@@ -238,7 +238,7 @@ class ImageViewerApp(QWidget):
 
     def show_placeholders(self):
         # 上方占位图
-        top_placeholder = Image.new("RGB", (512, 512), (240, 240, 240))
+        top_placeholder = Image.new("RGB", (self.top_size, self.top_size), (240, 240, 240))
         draw = ImageDraw.Draw(top_placeholder)
         try:
             font = ImageFont.truetype("/System/Library/Fonts/Helvetica.ttc", 20)
@@ -249,21 +249,21 @@ class ImageViewerApp(QWidget):
         bbox = draw.textbbox((0, 0), text, font=font)
         text_width = bbox[2] - bbox[0]
         text_height = bbox[3] - bbox[1]
-        x = (512 - text_width) // 2
-        y = (512 - text_height) // 2
+        x = (self.top_size - text_width) // 2
+        y = (self.top_size - text_height) // 2
         draw.text((x, y), text, fill=(180, 180, 180), font=font)
 
         self.top_placeholder_photo = self.set_label_image(self.top_image_label, top_placeholder)
 
-        bottom_placeholder = Image.new("RGB", (512, 512), (245, 245, 245))
+        bottom_placeholder = Image.new("RGB", (self.bottom_width, self.bottom_height), (245, 245, 245))
         draw = ImageDraw.Draw(bottom_placeholder)
 
         text = ""
         bbox = draw.textbbox((0, 0), text, font=font)
         text_width = bbox[2] - bbox[0]
         text_height = bbox[3] - bbox[1]
-        x = (512 - text_width) // 2
-        y = (512 - text_height) // 2
+        x = (self.top_size - text_width) // 2
+        y = (self.top_size - text_height) // 2
         draw.text((x, y), text, fill=(180, 180, 180), font=font)
 
         self.bottom_placeholder_photo = self.set_label_image(self.bottom_image_label, bottom_placeholder)
@@ -359,10 +359,10 @@ class ImageViewerApp(QWidget):
         draw = ImageDraw.Draw(result_image)
 
         line_x = x_coord - 1
-        draw.line([(line_x, 0), (line_x, 511)], fill=(0, 255, 0), width=2)
+        draw.line([(line_x, 0), (line_x, self.top_size-1)], fill=(0, 255, 0), width=2)
 
         line_y = y_coord - 1
-        draw.line([(0, line_y), (511, line_y)], fill=(255, 0, 0), width=2)
+        draw.line([(0, line_y), (self.top_size-1, line_y)], fill=(255, 0, 0), width=2)
 
         self.top_line_photo = self.set_label_image(self.top_image_label, result_image)
         self.draw_bottom_line(x_coord)
@@ -375,7 +375,7 @@ class ImageViewerApp(QWidget):
         draw = ImageDraw.Draw(img_copy)
 
         line_x = x_coord - 1
-        draw.line([(line_x, 0), (line_x, 1919)], fill=(0, 255, 0), width=2)
+        draw.line([(line_x, 0), (line_x, self.bottom_height-1)], fill=(0, 255, 0), width=2)
 
         self.bottom_line_image = img_copy
         self.update_bottom_display_with_line()
@@ -405,7 +405,7 @@ class ImageViewerApp(QWidget):
             image_path = self.bottom_image_paths[index]
             original_image = Image.open(image_path)
 
-            resized_image, _ = self.resize_and_center_with_info(original_image, (512, 1920))
+            resized_image, _ = self.resize_and_center_with_info(original_image, (self.bottom_width, self.bottom_height))
             self.bottom_image = resized_image
 
             self.info_label.setText(f"图片{index + 1}/{len(self.bottom_image_paths)} (Y={y_coord})")
@@ -470,7 +470,7 @@ class ImageViewerApp(QWidget):
 
             try:
                 original_image = Image.open(image_path)
-                resized_image, display_info = self.resize_and_center_with_info(original_image, (512, 512))
+                resized_image, display_info = self.resize_and_center_with_info(original_image, (self.top_size, self.top_size))
                 # 存储为覆盖图片
                 self.top_image = resized_image
                 # 更新显示
@@ -511,7 +511,7 @@ class ImageViewerApp(QWidget):
                     if png_files:
                         image_path = png_files[0]
                         original_image = Image.open(image_path)
-                        resized_image, display_info = self.resize_and_center_with_info(original_image, (512, 512))
+                        resized_image, display_info = self.resize_and_center_with_info(original_image, (self.top_size, self.top_size))
                         # 存储为底座图片
                         self.base_image = resized_image
                         # 更新显示
