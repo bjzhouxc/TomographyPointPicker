@@ -269,29 +269,57 @@ class ImageViewerApp(QWidget):
         self.bottom_placeholder_photo = self.set_label_image(self.bottom_image_label, bottom_placeholder)
 
     def on_top_image_click(self, x, y):
-        if self.top_image is None:
+        if self.top_image is None and self.base_image is None:
             return
 
+        # 获取label的实际尺寸
         label_width = self.top_image_label.width()
         label_height = self.top_image_label.height()
 
-        img_width = self.top_display_width
-        img_height = self.top_display_height
+        # 获取当前显示的pixmap
+        pixmap = self.top_image_label.pixmap()
+        if pixmap is None:
+            return
 
-        offset_x = (label_width - img_width) // 2
-        offset_y = (label_height - img_height) // 2
+        # 获取pixmap的原始尺寸（这是图片的实际像素尺寸）
+        pixmap_width = pixmap.width()
+        pixmap_height = pixmap.height()
 
+        if label_width <= 0 or label_height <= 0 or pixmap_width <= 0 or pixmap_height <= 0:
+            return
+
+        # 计算图片在label中实际显示的大小（保持比例缩放后）
+        ratio = min(label_width / pixmap_width, label_height / pixmap_height)
+        display_width = int(pixmap_width * ratio)
+        display_height = int(pixmap_height * ratio)
+
+        # 左对齐，偏移量为0
+        offset_x = 0
+        offset_y = 0
+
+        # 计算点击在显示图片上的位置
         img_x = x - offset_x
         img_y = y - offset_y
 
-        if img_x < 0 or img_x >= img_width or img_y < 0 or img_y >= img_height:
+        # 检查是否点击在图片范围内
+        if img_x < 0 or img_x >= display_width or img_y < 0 or img_y >= display_height:
             return
 
-        original_x = int((img_x / img_width) * 512)
-        original_y = int((img_y / img_height) * 512)
+        # 获取原始图片的尺寸（用于坐标转换）
+        if self.base_image is not None:
+            orig_width, orig_height = self.base_image.size
+        elif self.top_image is not None:
+            orig_width, orig_height = self.top_image.size
+        else:
+            return
 
-        original_x = max(1, min(512, original_x))
-        original_y = max(1, min(512, original_y))
+        # 将点击位置映射到原始图片坐标
+        original_x = int((img_x / display_width) * orig_width)
+        original_y = int((img_y / display_height) * orig_height)
+
+        # 确保坐标在有效范围内
+        original_x = max(1, min(orig_width, original_x))
+        original_y = max(1, min(orig_height, original_y))
 
         self.current_x = original_x
         self.current_y = original_y
