@@ -55,7 +55,7 @@ class ImageViewerApp(QWidget):
     def __init__(self):
         super().__init__()
         self.setWindowTitle("Tomography Point Picker")
-        self.resize(565, 900)
+        self.resize(1000, 1000)
 
         # 定义尺寸常量
         self.top_size = 512
@@ -92,24 +92,23 @@ class ImageViewerApp(QWidget):
 
     def setup_ui(self):
         """创建界面组件"""
-        root_layout = QVBoxLayout(self)
+        root_layout = QHBoxLayout(self)  # 改为水平布局
         root_layout.setContentsMargins(10, 10, 10, 10)
         root_layout.setSpacing(10)
 
-        # ----- 顶部输入区域 -----
-        input_frame = QWidget(self)
-        input_frame.setStyleSheet("background: #F0F0F0;")
-        input_layout = QVBoxLayout(input_frame)
-        input_layout.setContentsMargins(0, 0, 0, 0)
-        input_layout.setSpacing(6)
-        root_layout.addWidget(input_frame)
+        # ----- 左侧控制区域 -----
+        left_panel = QWidget(self)
+        left_panel.setFixedWidth(450)  # 固定宽度
+        left_layout = QVBoxLayout(left_panel)
+        left_layout.setContentsMargins(5, 5, 5, 5)
+        left_layout.setSpacing(8)
+        root_layout.addWidget(left_panel)
 
-        # 第一行：上方图片输入（直接传入图片路径）
+        # 第一行：上方图片输入
         row1_layout = QHBoxLayout()
-        input_layout.addLayout(row1_layout)
+        left_layout.addLayout(row1_layout)
 
         label1 = QLabel("上方图片路径:")
-        label1.setStyleSheet("background: #F0F0F0;")
         row1_layout.addWidget(label1)
 
         self.url_entry_top = PathLineEdit(self.select_top_image)
@@ -121,12 +120,11 @@ class ImageViewerApp(QWidget):
         load_btn1.clicked.connect(self.select_top_image)
         row1_layout.addWidget(load_btn1)
 
-        # 第二行：下方图片输入（传入文件夹路径，包含Angio和B-scan_PixelRatio）
+        # 第二行：下方图片输入
         row2_layout = QHBoxLayout()
-        input_layout.addLayout(row2_layout)
+        left_layout.addLayout(row2_layout)
 
         label2 = QLabel("数据文件夹路径:")
-        label2.setStyleSheet("background: #F0F0F0;")
         row2_layout.addWidget(label2)
 
         self.url_entry_bottom = PathLineEdit(self.select_data_folder)
@@ -138,22 +136,25 @@ class ImageViewerApp(QWidget):
         load_btn2.clicked.connect(self.select_data_folder)
         row2_layout.addWidget(load_btn2)
 
-        # 显示当前B-scan索引
+        # 信息标签（原有）
         self.info_label = QLabel("B-scan: 未加载")
         self.info_label.setAlignment(Qt.AlignCenter)
         self.info_label.setStyleSheet("background: #F0F0F0; color: #666666;")
-        input_layout.addWidget(self.info_label)
+        left_layout.addWidget(self.info_label)
 
-        # 绑定回车键
+        # 绑定回车键（原有）
         self.url_entry_top.returnPressed.connect(lambda: self.load_image("top_only"))
         self.url_entry_bottom.returnPressed.connect(lambda: self.load_image("both"))
 
-        # ----- 图片显示区域 -----
-        display_frame = QWidget(self)
-        display_layout = QGridLayout(display_frame)
-        display_layout.setContentsMargins(0, 0, 0, 0)
-        display_layout.setSpacing(5)
-        root_layout.addWidget(display_frame, 1)
+        # 左侧底部留白
+        left_layout.addStretch()
+
+        # ----- 右侧图片显示区域 -----
+        right_panel = QWidget(self)
+        right_layout = QVBoxLayout(right_panel)
+        right_layout.setContentsMargins(0, 0, 0, 0)
+        right_layout.setSpacing(5)
+        root_layout.addWidget(right_panel, 1)  # 占据剩余空间
 
         # 上方图片显示
         top_frame = QGroupBox("上方图片 - 点击选择坐标")
@@ -161,8 +162,9 @@ class ImageViewerApp(QWidget):
         top_layout.setContentsMargins(5, 5, 5, 5)
 
         self.top_image_label = ClickableImageLabel(self.on_top_image_click)
+        self.top_image_label.setAlignment(Qt.AlignLeft | Qt.AlignTop)
         top_layout.addWidget(self.top_image_label)
-        display_layout.addWidget(top_frame, 0, 0)
+        right_layout.addWidget(top_frame, 1)
 
         # 下方图片显示
         bottom_frame = QGroupBox("下方图片")
@@ -182,9 +184,7 @@ class ImageViewerApp(QWidget):
         self.bottom_scroll_area.setWidget(self.bottom_image_label)
 
         bottom_layout.addWidget(self.bottom_scroll_area)
-        display_layout.addWidget(bottom_frame, 1, 0)
-        display_layout.setRowStretch(0, 1)
-        display_layout.setRowStretch(1, 1)
+        right_layout.addWidget(bottom_frame, 1)
 
         # 显示占位图
         self.show_placeholders()
@@ -279,6 +279,7 @@ class ImageViewerApp(QWidget):
 
         self.draw_crosshair(original_x, original_y)
         self.switch_bottom_image_by_y(original_y)
+        self.coord_label.setText(f"坐标: X={original_x}, Y={original_y}")
 
     def draw_crosshair(self, x_coord, y_coord):
         if self.top_image is None:
@@ -327,6 +328,9 @@ class ImageViewerApp(QWidget):
         if index < 0 or index >= len(self.bottom_image_paths):
             return
 
+        # 保存当前滚动位置
+        current_scroll_pos = self.bottom_scroll_area.verticalScrollBar().value()
+
         try:
             image_path = self.bottom_image_paths[index]
             original_image = Image.open(image_path)
@@ -349,8 +353,8 @@ class ImageViewerApp(QWidget):
                 self.bottom_line_image = None
                 self.update_bottom_display()
 
-            # 滚动到顶部
-            self.bottom_scroll_area.verticalScrollBar().setValue(0)
+            # 恢复滚动位置（在新的图片加载完成后）
+            self.bottom_scroll_area.verticalScrollBar().setValue(current_scroll_pos)
 
         except Exception as e:
             self.show_error("错误", f"加载图片失败：\n{str(e)}")
@@ -460,6 +464,8 @@ class ImageViewerApp(QWidget):
                     self.switch_bottom_image_by_y(self.current_y)
                 else:
                     self.switch_bottom_image_by_y(1)
+                    # 首次加载时置顶
+                    self.bottom_scroll_area.verticalScrollBar().setValue(0)
 
                 self.setWindowTitle(f"Tomography Point Picker - Angio + B-scan已加载 ({len(png_files)}张)")
 
