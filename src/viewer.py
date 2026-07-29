@@ -17,6 +17,7 @@ from PySide6.QtWidgets import (
     QPushButton,
     QScrollArea,
     QSizePolicy,
+    QSlider,
     QVBoxLayout,
     QWidget,
 )
@@ -55,7 +56,7 @@ class ImageViewerApp(QWidget):
     def __init__(self):
         super().__init__()
         self.setWindowTitle("Tomography Point Picker")
-        self.resize(1000, 1000)
+        self.resize(1025, 1000)
 
         # 定义尺寸常量
         self.top_size = 512
@@ -80,6 +81,7 @@ class ImageViewerApp(QWidget):
         self.top_photo = None
         self.bottom_photo = None
         self.top_image = None
+        self.base_image = None
         self.bottom_image = None
         self.bottom_display_photo = None
 
@@ -87,6 +89,8 @@ class ImageViewerApp(QWidget):
         self.top_line_photo = None
         self.bottom_line_photo = None
         self.bottom_line_image = None
+
+        self.overlay_opacity = 0
 
         self.setup_ui()
 
@@ -136,13 +140,30 @@ class ImageViewerApp(QWidget):
         load_btn2.clicked.connect(self.select_data_folder)
         row2_layout.addWidget(load_btn2)
 
-        # 信息标签（原有）
+        # 信息标签
         self.info_label = QLabel("B-scan: 未加载")
         self.info_label.setAlignment(Qt.AlignCenter)
         self.info_label.setStyleSheet("background: #F0F0F0; color: #666666;")
         left_layout.addWidget(self.info_label)
 
-        # 绑定回车键（原有）
+        # 透明度控制
+        opacity_layout = QHBoxLayout()
+        left_layout.addLayout(opacity_layout)
+
+        opacity_label = QLabel("覆盖透明度:")
+        opacity_layout.addWidget(opacity_label)
+
+        self.opacity_slider = QSlider(Qt.Horizontal)
+        self.opacity_slider.setRange(0, 100)
+        self.opacity_slider.setValue(0)
+        self.opacity_slider.valueChanged.connect(self.on_opacity_changed)
+        opacity_layout.addWidget(self.opacity_slider)
+
+        self.opacity_value_label = QLabel("0%")
+        self.opacity_value_label.setFixedWidth(40)
+        opacity_layout.addWidget(self.opacity_value_label)
+
+        # 绑定回车键
         self.url_entry_top.returnPressed.connect(lambda: self.load_image("top_only"))
         self.url_entry_bottom.returnPressed.connect(lambda: self.load_image("both"))
 
@@ -279,14 +300,37 @@ class ImageViewerApp(QWidget):
 
         self.draw_crosshair(original_x, original_y)
         self.switch_bottom_image_by_y(original_y)
-        self.coord_label.setText(f"坐标: X={original_x}, Y={original_y}")
+
+    def on_opacity_changed(self, value):
+        """透明度滑块变化时的处理"""
+        self.overlay_opacity = value
+        self.opacity_value_label.setText(f"{value}%")
+        self.update_top_display()
 
     def draw_crosshair(self, x_coord, y_coord):
-        if self.top_image is None:
+        if self.base_image is None and self.top_image is None:
             return
 
-        img_copy = self.top_image.copy()
-        draw = ImageDraw.Draw(img_copy)
+        # 获取当前显示的图片（需要与update_top_display保持一致）
+        if self.base_image is not None:
+            # 重新合成图片
+            result_image = self.base_image.copy()
+            if self.top_image is not None and self.overlay_opacity < 100:
+                alpha = 1.0 - (self.overlay_opacity / 100.0)
+                if self.top_image.size != self.base_image.size:
+                    overlay_resized = self.top_image.resize(self.base_image.size, Image.Resampling.LANCZOS)
+                else:
+                    overlay_resized = self.top_image
+                result_image = Image.blend(self.base_image, overlay_resized, 1.0 - alpha)
+            elif self.overlay_opacity == 100:
+                result_image = self.base_image
+        else:
+            result_image = self.top_image.copy() if self.top_image is not None else None
+
+        if result_image is None:
+            return
+
+        draw = ImageDraw.Draw(result_image)
 
         line_x = x_coord - 1
         draw.line([(line_x, 0), (line_x, 511)], fill=(0, 255, 0), width=2)
@@ -294,7 +338,7 @@ class ImageViewerApp(QWidget):
         line_y = y_coord - 1
         draw.line([(0, line_y), (511, line_y)], fill=(255, 0, 0), width=2)
 
-        self.top_line_photo = self.set_label_image(self.top_image_label, img_copy)
+        self.top_line_photo = self.set_label_image(self.top_image_label, result_image)
         self.draw_bottom_line(x_coord)
 
     def draw_bottom_line(self, x_coord):
@@ -401,8 +445,10 @@ class ImageViewerApp(QWidget):
             try:
                 original_image = Image.open(image_path)
                 resized_image, display_info = self.resize_and_center_with_info(original_image, (512, 512))
-                self.top_photo = self.set_label_image(self.top_image_label, resized_image)
+                # 存储为覆盖图片
                 self.top_image = resized_image
+                # 更新显示
+                self.update_top_display()
 
                 self.top_display_width = display_info["display_width"]
                 self.top_display_height = display_info["display_height"]
@@ -433,14 +479,17 @@ class ImageViewerApp(QWidget):
             try:
                 # 加载Angio
                 angio_path = os.path.join(base_path, "Angio")
+                # 在 load_image 方法的 both 分支中，原来加载Angio的部分：
                 if os.path.exists(angio_path):
                     png_files = glob.glob(os.path.join(angio_path, "*.png"))
                     if png_files:
                         image_path = png_files[0]
                         original_image = Image.open(image_path)
                         resized_image, display_info = self.resize_and_center_with_info(original_image, (512, 512))
-                        self.top_photo = self.set_label_image(self.top_image_label, resized_image)
-                        self.top_image = resized_image
+                        # 存储为底座图片
+                        self.base_image = resized_image
+                        # 更新显示
+                        self.update_top_display()
 
                         self.top_display_width = display_info["display_width"]
                         self.top_display_height = display_info["display_height"]
@@ -475,6 +524,39 @@ class ImageViewerApp(QWidget):
 
             except Exception as e:
                 self.show_error("错误", f"加载失败：\n{str(e)}")
+
+    def update_top_display(self):
+        """更新上方图片显示（合并底座和覆盖图）"""
+        # 如果没有底座图片，只显示覆盖图或占位图
+        if self.base_image is None:
+            if self.top_image is not None:
+                self.top_photo = self.set_label_image(self.top_image_label, self.top_image)
+            else:
+                self.show_placeholders()
+            return
+
+        # 如果有底座图片，开始合成
+        result_image = self.base_image.copy()
+
+        if self.top_image is not None and self.overlay_opacity <= 100:
+            # 计算透明度（0-1范围）
+            alpha = self.overlay_opacity / 100.0
+
+            # 将覆盖图调整到与底座图相同大小（如果需要）
+            if self.top_image.size != self.base_image.size:
+                overlay_resized = self.top_image.resize(self.base_image.size, Image.Resampling.LANCZOS)
+            else:
+                overlay_resized = self.top_image
+
+            # 使用Pillow的blend功能合成
+            result_image = Image.blend(self.base_image, overlay_resized, 1.0 - alpha)
+
+        # 如果透明度为100%，直接显示底座图
+        elif self.overlay_opacity == 100:
+            result_image = self.base_image
+
+        # 显示合成后的图片
+        self.top_photo = self.set_label_image(self.top_image_label, result_image)
 
     def update_bottom_display(self):
         """更新下方图片的显示"""
