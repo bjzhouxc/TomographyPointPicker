@@ -315,15 +315,13 @@ class ImageViewerApp(QWidget):
         if self.base_image is not None:
             # 重新合成图片
             result_image = self.base_image.copy()
-            if self.top_image is not None and self.overlay_opacity < 100:
-                alpha = 1.0 - (self.overlay_opacity / 100.0)
+            if self.top_image is not None and self.overlay_opacity <= 100:
+                alpha = self.overlay_opacity / 100.0
                 if self.top_image.size != self.base_image.size:
                     overlay_resized = self.top_image.resize(self.base_image.size, Image.Resampling.LANCZOS)
                 else:
                     overlay_resized = self.top_image
                 result_image = Image.blend(self.base_image, overlay_resized, 1.0 - alpha)
-            elif self.overlay_opacity == 100:
-                result_image = self.base_image
         else:
             result_image = self.top_image.copy() if self.top_image is not None else None
 
@@ -551,12 +549,11 @@ class ImageViewerApp(QWidget):
             # 使用Pillow的blend功能合成
             result_image = Image.blend(self.base_image, overlay_resized, 1.0 - alpha)
 
-        # 如果透明度为100%，直接显示底座图
-        elif self.overlay_opacity == 100:
-            result_image = self.base_image
-
         # 显示合成后的图片
         self.top_photo = self.set_label_image(self.top_image_label, result_image)
+
+        if self.current_x is not None and self.current_y is not None:
+            self.draw_crosshair(self.current_x, self.current_y)
 
     def update_bottom_display(self):
         """更新下方图片的显示"""
