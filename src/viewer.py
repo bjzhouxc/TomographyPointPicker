@@ -39,7 +39,7 @@ class ClickableImageLabel(QLabel):
     def __init__(self, click_handler, parent=None):
         super().__init__(parent)
         self.click_handler = click_handler
-        self.setAlignment(Qt.AlignCenter)
+        self.setAlignment(Qt.AlignLeft | Qt.AlignTop)
         self.setFrameShape(QFrame.Panel)
         self.setFrameShadow(QFrame.Sunken)
         self.setLineWidth(2)

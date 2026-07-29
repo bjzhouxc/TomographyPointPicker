@@ -1,5 +1,6 @@
 .venv/
-.dist/
-.build/
-.data/
 .idea/
+
+dist/
+build/
+data/
