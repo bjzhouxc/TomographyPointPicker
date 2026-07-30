@@ -1,9 +1,9 @@
 import glob
 import os
 import re
-from typing import Optional, Tuple
+from typing import Optional, Tuple, List
 
-from PIL import Image, ImageDraw
+from PIL import Image
 from PySide6.QtWidgets import QMessageBox
 
 from ..models import PointManager
@@ -34,7 +34,7 @@ class ImageController:
         self.current_y: Optional[int] = None
 
         # 底部图片路径列表
-        self.bottom_image_paths = []
+        self.bottom_image_paths: List[str] = []
 
         # 透明度
         self.overlay_opacity = 0
@@ -145,16 +145,6 @@ class ImageController:
             self.app.show_error("错误", f"加载图片失败：\n{str(e)}")
             return False
 
-    def get_top_display_image(self) -> Optional[Image.Image]:
-        """获取上方显示图片（合成后的）"""
-        if self.base_image is None:
-            return self.top_image
-
-        result = ImageUtils.blend_images(
-            self.base_image, self.top_image, self.overlay_opacity
-        )
-        return result
-
     def set_opacity(self, opacity: int):
         """设置透明度"""
         self.overlay_opacity = opacity
@@ -162,5 +152,3 @@ class ImageController:
     def get_point_manager(self) -> PointManager:
         """获取点管理器"""
         return self.point_manager
-
-    # src/controllers/image_controller.py

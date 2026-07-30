@@ -2,7 +2,7 @@ import os
 
 from PIL import Image, ImageDraw, ImageFont
 from PySide6.QtCore import Qt
-from PySide6.QtGui import QImage, QPixmap
+from PySide6.QtGui import QColor
 from PySide6.QtWidgets import (
     QFrame,
     QGroupBox,
@@ -19,6 +19,7 @@ from PySide6.QtWidgets import (
     QWidget,
     QListWidget,
     QListWidgetItem,
+    QColorDialog,
 )
 
 from .widgets import PathLineEdit, ClickableImageLabel, PointListItem
@@ -48,6 +49,9 @@ class ImageViewerApp(QWidget):
 
         # 初始化控制器
         self.controller = ImageController(self)
+
+        # 当前选中的点颜色（默认红色）
+        self.point_color = (0, 255, 0)
 
         self.setup_ui()
         self.show_placeholders()
@@ -152,9 +156,27 @@ class ImageViewerApp(QWidget):
         """)
         point_layout = QVBoxLayout(point_group)
 
-        # 按钮行
+        # 按钮行 - 包含颜色选择和记录按钮
         button_layout = QHBoxLayout()
 
+        # 颜色选择按钮
+        self.color_picker_btn = QPushButton("🎨")
+        self.color_picker_btn.setFixedSize(32, 32)
+        self.color_picker_btn.setStyleSheet(f"""
+            QPushButton {{
+                background: rgb({self.point_color[0]}, {self.point_color[1]}, {self.point_color[2]});
+                border-radius: 4px;
+                font-size: 16px;
+            }}
+            QPushButton:hover {{
+                border: 2px solid #666666;
+            }}
+        """)
+        self.color_picker_btn.setToolTip("选择点的颜色")
+        self.color_picker_btn.clicked.connect(self.choose_point_color)
+        button_layout.addWidget(self.color_picker_btn)
+
+        # 记录点按钮
         self.record_point_btn = QPushButton("📌 记录该点")
         self.record_point_btn.setStyleSheet("""
             QPushButton {
@@ -180,6 +202,7 @@ class ImageViewerApp(QWidget):
         self.record_point_btn.setEnabled(False)
         button_layout.addWidget(self.record_point_btn)
 
+        # 清空所有点按钮
         self.clear_points_btn = QPushButton("🗑 清空所有")
         self.clear_points_btn.setStyleSheet("""
             QPushButton {
@@ -276,6 +299,28 @@ class ImageViewerApp(QWidget):
         bottom_layout.addWidget(self.bottom_scroll_area)
         right_layout.addWidget(bottom_frame, 1)
 
+    # ========== 颜色选择功能 ==========
+
+    def choose_point_color(self):
+        """打开颜色选择对话框"""
+        current_color = QColor(self.point_color[0], self.point_color[1], self.point_color[2])
+        color = QColorDialog.getColor(current_color, self, "选择点的颜色")
+
+        if color.isValid():
+            self.point_color = (color.red(), color.green(), color.blue())
+            # 更新颜色按钮的样式
+            self.color_picker_btn.setStyleSheet(f"""
+                QPushButton {{
+                    background: rgb({self.point_color[0]}, {self.point_color[1]}, {self.point_color[2]});
+                    border-radius: 4px;
+                    font-size: 16px;
+                }}
+                QPushButton:hover {{
+                    border: 2px solid #666666;
+                }}
+            """)
+            # 如果有点已经记录，不自动重新绘制，等待用户操作
+
     def resizeEvent(self, event):
         super().resizeEvent(event)
         if self.controller.current_x is not None:
@@ -361,62 +406,70 @@ class ImageViewerApp(QWidget):
         self.update_top_display()
 
     def draw_crosshair(self, x_coord, y_coord):
-        """绘制十字准星和所有标注点"""
         if self.controller.base_image is None and self.controller.top_image is None:
             return
 
-        # 获取原始图片（未绘制十字准星的版本）
+        # 获取干净的图片（从原始图片重新绘制）
         if self.controller.base_image is not None:
-            # 如果有底图，从底图开始合成
+            # 有底图，从底图开始
             result_image = self.controller.base_image.copy()
             if self.controller.top_image is not None:
                 # 应用透明度
-                opacity = self.controller.overlay_opacity
-                if opacity >= 0:
-                    result_image = ImageUtils.blend_images(
-                        self.controller.base_image,
-                        self.controller.top_image,
-                        opacity
+                alpha = self.controller.overlay_opacity / 100.0
+                if self.controller.top_image.size != self.controller.base_image.size:
+                    overlay_resized = self.controller.top_image.resize(
+                        self.controller.base_image.size, Image.Resampling.LANCZOS
                     )
+                else:
+                    overlay_resized = self.controller.top_image
+                # 透明度越高，覆盖图越透明
+                overlay_weight = 1.0 - alpha
+                result_image = Image.blend(self.controller.base_image, overlay_resized, overlay_weight)
         else:
-            # 只有覆盖图，直接复制
+            # 只有覆盖图
             result_image = self.controller.top_image.copy() if self.controller.top_image is not None else None
 
         if result_image is None:
             return
 
-        # 在干净的图片上绘制十字准星
-        ImageUtils.draw_crosshair(result_image, x_coord, y_coord)
+        draw = ImageDraw.Draw(result_image)
 
-        # 绘制所有已记录的点
-        self.draw_recorded_points(result_image)
+        # 绘制十字准星
+        line_x = x_coord - 1
+        draw.line([(line_x, 0), (line_x, self.top_size - 1)], fill=(0, 255, 0), width=2)
 
-        # 更新显示
+        line_y = y_coord - 1
+        draw.line([(0, line_y), (self.top_size - 1, line_y)], fill=(255, 0, 0), width=2)
+
+        # 绘制已记录的点（使用当前选中的颜色）
+        self.draw_recorded_points(draw)
+
         self.top_line_photo = self.set_label_image(self.top_image_label, result_image)
         self.draw_bottom_line(x_coord)
 
-    def draw_recorded_points(self, image):
-        """在图片上绘制所有已记录的点"""
+    def draw_recorded_points(self, draw):
+        """在图片上绘制所有已记录的点（使用当前选中的颜色）"""
         points = self.controller.get_point_manager().get_points()
         if not points:
             return
 
-        draw = ImageDraw.Draw(image)
         point_radius = self.controller.get_point_manager().point_size // 2
 
-        for x, y in points:
-            if 0 <= x < image.width and 0 <= y < image.height:
-                # 绘制白色描边
-                draw.ellipse(
-                    [(x - point_radius - 1, y - point_radius - 1),
-                     (x + point_radius + 1, y + point_radius + 1)],
-                    fill=(255, 255, 255)
-                )
-                # 绘制白色点
+        for x, y, color in points:
+            # 获取图片尺寸（用于坐标验证）
+            if self.controller.base_image is not None:
+                img_width, img_height = self.controller.base_image.size
+            elif self.controller.top_image is not None:
+                img_width, img_height = self.controller.top_image.size
+            else:
+                return
+
+            if 0 <= x < img_width and 0 <= y < img_height:
+                # 绘制彩色点（使用当前选中的颜色）
                 draw.ellipse(
                     [(x - point_radius, y - point_radius),
                      (x + point_radius, y + point_radius)],
-                    fill=(255, 255, 255)
+                    fill=color
                 )
 
     def draw_bottom_line(self, x_coord):
@@ -463,15 +516,44 @@ class ImageViewerApp(QWidget):
 
     def update_top_display(self):
         """更新上方图片显示（合并底座和覆盖图）"""
-        result_image = self.controller.get_top_display_image()
+        # 如果没有底座图片，只显示覆盖图或占位图
+        if self.controller.base_image is None:
+            if self.controller.top_image is not None:
+                self.top_photo = self.set_label_image(self.top_image_label, self.controller.top_image)
+            else:
+                self.show_placeholders()
+            return
 
-        if result_image is not None:
-            self.top_photo = self.set_label_image(self.top_image_label, result_image)
+        # 有底图，进行合成
+        result_image = self.controller.base_image.copy()
 
-            if self.controller.current_x is not None and self.controller.current_y is not None:
-                self.draw_crosshair(self.controller.current_x, self.controller.current_y)
-        else:
-            self.show_placeholders()
+        if self.controller.top_image is not None:
+            alpha = self.controller.overlay_opacity / 100.0
+
+            if self.controller.top_image.size != self.controller.base_image.size:
+                overlay_resized = self.controller.top_image.resize(
+                    self.controller.base_image.size, Image.Resampling.LANCZOS
+                )
+            else:
+                overlay_resized = self.controller.top_image
+
+            # 透明度越高，覆盖图越透明
+            overlay_weight = 1.0 - alpha
+            result_image = Image.blend(self.controller.base_image, overlay_resized, overlay_weight)
+
+        # 如果有坐标，绘制十字准星
+        if self.controller.current_x is not None and self.controller.current_y is not None:
+            draw = ImageDraw.Draw(result_image)
+            # 绘制十字准星
+            line_x = self.controller.current_x - 1
+            draw.line([(line_x, 0), (line_x, self.top_size - 1)], fill=(0, 255, 0), width=2)
+            line_y = self.controller.current_y - 1
+            draw.line([(0, line_y), (self.top_size - 1, line_y)], fill=(255, 0, 0), width=2)
+            # 绘制已记录的点
+            self.draw_recorded_points(draw)
+
+        # 显示图片
+        self.top_photo = self.set_label_image(self.top_image_label, result_image)
 
     def update_bottom_display(self):
         """更新下方图片的显示"""
@@ -515,7 +597,6 @@ class ImageViewerApp(QWidget):
                 return
 
             if self.controller.load_top_image(image_path):
-
                 self.update_top_display()
                 if self.controller.current_x is not None and self.controller.current_y is not None:
                     self.draw_crosshair(self.controller.current_x, self.controller.current_y)
@@ -551,10 +632,11 @@ class ImageViewerApp(QWidget):
             self.show_warning("提示", "请先在上方图片中点击选择一个位置")
             return
 
-        if self.controller.get_point_manager().add_point(x, y):
+        # 添加点（使用当前颜色）
+        if self.controller.get_point_manager().add_point(x, y, self.point_color):
             self.update_point_list()
             self.refresh_top_image()
-            self.show_status_message(f"已记录点 ({x}, {y})")
+            self.show_status_message(f"已记录点 ({x}, {y}) 颜色: RGB{self.point_color}")
         else:
             self.show_warning("提示", f"点 ({x}, {y}) 已存在")
 
@@ -590,9 +672,9 @@ class ImageViewerApp(QWidget):
 
         points = self.controller.get_point_manager().get_points()
 
-        for i, (x, y) in enumerate(points):
+        for i, (x, y, color) in enumerate(points):  # 解包出颜色
             item = QListWidgetItem(self.point_list_widget)
-            item_widget = PointListItem(i, x, y, self.delete_point)
+            item_widget = PointListItem(i, x, y, color, self.delete_point)  # 传入颜色
             item.setSizeHint(item_widget.sizeHint())
             self.point_list_widget.addItem(item)
             self.point_list_widget.setItemWidget(item, item_widget)

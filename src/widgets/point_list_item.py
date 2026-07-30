@@ -1,18 +1,28 @@
 from PySide6.QtWidgets import QWidget, QHBoxLayout, QLabel, QPushButton
+from typing import Tuple
 
 class PointListItem(QWidget):
-    """点列表项组件"""
-
-    def __init__(self, index: int, x: int, y: int, delete_callback, parent=None):
+    def __init__(self, index: int, x: int, y: int, color: Tuple[int, int, int], delete_callback, parent=None):
         super().__init__(parent)
         self.index = index
         self.x = x
         self.y = y
+        self.color = color
         self.delete_callback = delete_callback
 
         layout = QHBoxLayout(self)
         layout.setContentsMargins(5, 2, 5, 2)
         layout.setSpacing(5)
+
+        # 颜色指示器（小方块）
+        self.color_indicator = QLabel()
+        self.color_indicator.setFixedSize(12, 12)
+        self.color_indicator.setStyleSheet(f"""
+            background: rgb({color[0]}, {color[1]}, {color[2]});
+            border: 1px solid #999999;
+            border-radius: 3px;
+        """)
+        layout.addWidget(self.color_indicator)
 
         # 显示坐标
         self.coord_label = QLabel(f"点 {index + 1}: ({x}, {y})")
@@ -27,8 +37,8 @@ class PointListItem(QWidget):
                 background: #ff4444;
                 color: white;
                 border: none;
-                border-radius: 10px;
-                font-size: 12px;
+                border-radius: 6px;
+                font-size: 10px;
                 font-weight: bold;
             }
             QPushButton:hover {
