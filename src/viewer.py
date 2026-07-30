@@ -1,6 +1,7 @@
 import glob
 import os
 import re
+from typing import List, Tuple
 
 from PIL import Image, ImageDraw, ImageFont
 from PySide6.QtCore import Qt
@@ -20,36 +21,88 @@ from PySide6.QtWidgets import (
     QSlider,
     QVBoxLayout,
     QWidget,
+    QListWidget,
+    QListWidgetItem,
+    QPushButton,
+    QHBoxLayout,
 )
 
 
-class PathLineEdit(QLineEdit):
-    def __init__(self, double_click_handler, parent=None):
+class PointManager:
+    """管理记录的点"""
+
+    def __init__(self):
+        self.points: List[Tuple[int, int]] = []  # 存储 (x, y) 坐标
+        self.point_size = 5  # 点的直径
+
+    def add_point(self, x: int, y: int):
+        """添加点"""
+        if (x, y) not in self.points:
+            self.points.append((x, y))
+            return True
+        return False
+
+    def remove_point(self, index: int):
+        """删除点"""
+        if 0 <= index < len(self.points):
+            self.points.pop(index)
+            return True
+        return False
+
+    def clear_points(self):
+        """清空所有点"""
+        self.points.clear()
+
+    def get_points(self) -> List[Tuple[int, int]]:
+        """获取所有点"""
+        return self.points.copy()
+
+
+class PointListItem(QWidget):
+    """点列表项组件"""
+
+    def __init__(self, index: int, x: int, y: int, delete_callback, parent=None):
         super().__init__(parent)
-        self.double_click_handler = double_click_handler
-        self.setReadOnly(True)
+        self.index = index
+        self.x = x
+        self.y = y
+        self.delete_callback = delete_callback
 
-    def mouseDoubleClickEvent(self, event):
-        if event.button() == Qt.LeftButton:
-            self.double_click_handler()
-        super().mouseDoubleClickEvent(event)
+        layout = QHBoxLayout(self)
+        layout.setContentsMargins(5, 2, 5, 2)
+        layout.setSpacing(5)
 
+        # 显示坐标
+        self.coord_label = QLabel(f"点 {index + 1}: ({x}, {y})")
+        self.coord_label.setStyleSheet("color: #333333; font-size: 12px;")
+        layout.addWidget(self.coord_label, 1)
 
-class ClickableImageLabel(QLabel):
-    def __init__(self, click_handler, parent=None):
-        super().__init__(parent)
-        self.click_handler = click_handler
-        self.setAlignment(Qt.AlignLeft | Qt.AlignTop)
-        self.setFrameShape(QFrame.Panel)
-        self.setFrameShadow(QFrame.Sunken)
-        self.setLineWidth(2)
-        self.setStyleSheet("background: white;")
-        self.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
+        # 删除按钮
+        self.delete_btn = QPushButton("✕")
+        self.delete_btn.setFixedSize(12, 12)
+        self.delete_btn.setStyleSheet("""
+            QPushButton {
+                background: #ff4444;
+                color: white;
+                border: none;
+                border-radius: 10px;
+                font-size: 12px;
+                font-weight: bold;
+            }
+            QPushButton:hover {
+                background: #cc0000;
+            }
+            QPushButton:pressed {
+                background: #990000;
+            }
+        """)
+        self.delete_btn.clicked.connect(self.on_delete_clicked)
+        layout.addWidget(self.delete_btn)
 
-    def mousePressEvent(self, event):
-        if event.button() == Qt.LeftButton:
-            self.click_handler(event.position().x(), event.position().y())
-        super().mousePressEvent(event)
+    def on_delete_clicked(self):
+        """删除按钮点击事件"""
+        if self.delete_callback:
+            self.delete_callback(self.index)
 
 
 class ImageViewerApp(QWidget):
@@ -91,6 +144,9 @@ class ImageViewerApp(QWidget):
         self.bottom_line_image = None
 
         self.overlay_opacity = 0
+
+        # 初始化点管理器
+        self.point_manager = PointManager()
 
         self.setup_ui()
 
@@ -162,6 +218,113 @@ class ImageViewerApp(QWidget):
         self.opacity_value_label = QLabel("0%")
         self.opacity_value_label.setFixedWidth(40)
         opacity_layout.addWidget(self.opacity_value_label)
+
+        # ---- 点管理区域 ----
+        point_group = QGroupBox("标注点管理")
+        point_group.setStyleSheet("""
+            QGroupBox {
+                font-weight: bold;
+                border: 1px solid #cccccc;
+                border-radius: 5px;
+                margin-top: 10px;
+                padding-top: 10px;
+            }
+            QGroupBox::title {
+                subcontrol-origin: margin;
+                left: 10px;
+                padding: 0 5px 0 5px;
+            }
+        """)
+        point_layout = QVBoxLayout(point_group)
+
+        # 按钮行
+        button_layout = QHBoxLayout()
+
+        # 记录点按钮
+        self.record_point_btn = QPushButton("📌 记录该点")
+        self.record_point_btn.setStyleSheet("""
+            QPushButton {
+                background: #4CAF50;
+                color: white;
+                padding: 6px 12px;
+                border: none;
+                border-radius: 4px;
+                font-weight: bold;
+            }
+            QPushButton:hover {
+                background: #45a049;
+            }
+            QPushButton:pressed {
+                background: #3d8b40;
+            }
+            QPushButton:disabled {
+                background: #cccccc;
+                color: #666666;
+            }
+        """)
+        self.record_point_btn.clicked.connect(self.record_current_point)
+        self.record_point_btn.setEnabled(False)
+        button_layout.addWidget(self.record_point_btn)
+
+        # 清空所有点按钮
+        self.clear_points_btn = QPushButton("🗑 清空所有")
+        self.clear_points_btn.setStyleSheet("""
+            QPushButton {
+                background: #ff6b6b;
+                color: white;
+                padding: 6px 12px;
+                border: none;
+                border-radius: 4px;
+                font-weight: bold;
+            }
+            QPushButton:hover {
+                background: #ff5252;
+            }
+            QPushButton:pressed {
+                background: #e04848;
+            }
+            QPushButton:disabled {
+                background: #cccccc;
+                color: #666666;
+            }
+        """)
+        self.clear_points_btn.clicked.connect(self.clear_all_points)
+        self.clear_points_btn.setEnabled(False)
+        button_layout.addWidget(self.clear_points_btn)
+
+        point_layout.addLayout(button_layout)
+
+        # 点列表
+        list_label = QLabel("已记录的点:")
+        list_label.setStyleSheet("font-weight: bold; color: #555555; margin-top: 5px;")
+        point_layout.addWidget(list_label)
+
+        self.point_list_widget = QListWidget()
+        self.point_list_widget.setStyleSheet("""
+            QListWidget {
+                border: 1px solid #cccccc;
+                border-radius: 4px;
+                background: white;
+                min-height: 150px;
+                max-height: 200px;
+            }
+            QListWidget::item {
+                padding: 2px;
+                border-bottom: 1px solid #eeeeee;
+            }
+            QListWidget::item:selected {
+                background: #e3f2fd;
+            }
+        """)
+        self.point_list_widget.setSpacing(1)
+        point_layout.addWidget(self.point_list_widget)
+
+        # 点统计信息
+        self.point_count_label = QLabel("总计: 0 个点")
+        self.point_count_label.setStyleSheet("color: #666666; font-size: 11px;")
+        point_layout.addWidget(self.point_count_label)
+
+        left_layout.addWidget(point_group)
 
         # 绑定回车键
         self.url_entry_top.returnPressed.connect(lambda: self.load_image("top_only"))
@@ -245,26 +408,10 @@ class ImageViewerApp(QWidget):
         except Exception:
             font = ImageFont.load_default()
 
-        text = ""
-        bbox = draw.textbbox((0, 0), text, font=font)
-        text_width = bbox[2] - bbox[0]
-        text_height = bbox[3] - bbox[1]
-        x = (self.top_size - text_width) // 2
-        y = (self.top_size - text_height) // 2
-        draw.text((x, y), text, fill=(180, 180, 180), font=font)
-
         self.top_placeholder_photo = self.set_label_image(self.top_image_label, top_placeholder)
 
         bottom_placeholder = Image.new("RGB", (self.bottom_width, self.bottom_height), (245, 245, 245))
         draw = ImageDraw.Draw(bottom_placeholder)
-
-        text = ""
-        bbox = draw.textbbox((0, 0), text, font=font)
-        text_width = bbox[2] - bbox[0]
-        text_height = bbox[3] - bbox[1]
-        x = (self.top_size - text_width) // 2
-        y = (self.top_size - text_height) // 2
-        draw.text((x, y), text, fill=(180, 180, 180), font=font)
 
         self.bottom_placeholder_photo = self.set_label_image(self.bottom_image_label, bottom_placeholder)
 
@@ -293,9 +440,9 @@ class ImageViewerApp(QWidget):
         display_width = int(pixmap_width * ratio)
         display_height = int(pixmap_height * ratio)
 
-        # 左对齐，偏移量为0
-        offset_x = 0
-        offset_y = 0
+        # 使用居中偏移量
+        offset_x = self.top_offset_x
+        offset_y = self.top_offset_y
 
         # 计算点击在显示图片上的位置
         img_x = x - offset_x
@@ -329,6 +476,9 @@ class ImageViewerApp(QWidget):
         self.draw_crosshair(original_x, original_y)
         self.switch_bottom_image_by_y(original_y)
 
+        # 启用记录按钮
+        self.record_point_btn.setEnabled(True)
+
     def on_opacity_changed(self, value):
         """透明度滑块变化时的处理"""
         self.overlay_opacity = value
@@ -358,14 +508,49 @@ class ImageViewerApp(QWidget):
 
         draw = ImageDraw.Draw(result_image)
 
+        # 绘制十字准星
         line_x = x_coord - 1
-        draw.line([(line_x, 0), (line_x, self.top_size-1)], fill=(0, 255, 0), width=2)
+        draw.line([(line_x, 0), (line_x, self.top_size - 1)], fill=(0, 255, 0), width=2)
 
         line_y = y_coord - 1
-        draw.line([(0, line_y), (self.top_size-1, line_y)], fill=(255, 0, 0), width=2)
+        draw.line([(0, line_y), (self.top_size - 1, line_y)], fill=(255, 0, 0), width=2)
+
+        # 绘制已记录的点
+        self.draw_recorded_points(draw)
 
         self.top_line_photo = self.set_label_image(self.top_image_label, result_image)
         self.draw_bottom_line(x_coord)
+
+    def draw_recorded_points(self, draw):
+        """在图片上绘制所有已记录的点"""
+        if not self.point_manager.points:
+            return
+
+        # 获取图片尺寸（用于坐标验证）
+        if self.base_image is not None:
+            img_width, img_height = self.base_image.size
+        elif self.top_image is not None:
+            img_width, img_height = self.top_image.size
+        else:
+            return
+
+        # 绘制每个点
+        point_radius = self.point_manager.point_size // 2
+        for x, y in self.point_manager.points:
+            # 确保点在图片范围内
+            if 0 <= x < img_width and 0 <= y < img_height:
+                # 绘制白色外圈（使点更明显）
+                draw.ellipse(
+                    [(x - point_radius - 1, y - point_radius - 1),
+                     (x + point_radius + 1, y + point_radius + 1)],
+                    fill=(255, 255, 255)
+                )
+                # 绘制红色内圈
+                draw.ellipse(
+                    [(x - point_radius, y - point_radius),
+                     (x + point_radius, y + point_radius)],
+                    fill=(255, 0, 0)
+                )
 
     def draw_bottom_line(self, x_coord):
         if self.bottom_image is None:
@@ -375,7 +560,7 @@ class ImageViewerApp(QWidget):
         draw = ImageDraw.Draw(img_copy)
 
         line_x = x_coord - 1
-        draw.line([(line_x, 0), (line_x, self.bottom_height-1)], fill=(0, 255, 0), width=2)
+        draw.line([(line_x, 0), (line_x, self.bottom_height - 1)], fill=(0, 255, 0), width=2)
 
         self.bottom_line_image = img_copy
         self.update_bottom_display_with_line()
@@ -470,7 +655,8 @@ class ImageViewerApp(QWidget):
 
             try:
                 original_image = Image.open(image_path)
-                resized_image, display_info = self.resize_and_center_with_info(original_image, (self.top_size, self.top_size))
+                resized_image, display_info = self.resize_and_center_with_info(original_image,
+                                                                               (self.top_size, self.top_size))
                 # 存储为覆盖图片
                 self.top_image = resized_image
                 # 更新显示
@@ -505,13 +691,13 @@ class ImageViewerApp(QWidget):
             try:
                 # 加载Angio
                 angio_path = os.path.join(base_path, "Angio")
-                # 在 load_image 方法的 both 分支中，原来加载Angio的部分：
                 if os.path.exists(angio_path):
                     png_files = glob.glob(os.path.join(angio_path, "*.png"))
                     if png_files:
                         image_path = png_files[0]
                         original_image = Image.open(image_path)
-                        resized_image, display_info = self.resize_and_center_with_info(original_image, (self.top_size, self.top_size))
+                        resized_image, display_info = self.resize_and_center_with_info(original_image,
+                                                                                       (self.top_size, self.top_size))
                         # 存储为底座图片
                         self.base_image = resized_image
                         # 更新显示
@@ -547,6 +733,10 @@ class ImageViewerApp(QWidget):
                 # 恢复十字准星
                 if self.current_x is not None and self.current_y is not None:
                     self.draw_crosshair(self.current_x, self.current_y)
+
+                # 启用按钮
+                if self.current_x is not None and self.current_y is not None:
+                    self.record_point_btn.setEnabled(True)
 
             except Exception as e:
                 self.show_error("错误", f"加载失败：\n{str(e)}")
@@ -616,3 +806,157 @@ class ImageViewerApp(QWidget):
         }
 
         return resized_image, display_info
+
+    # ========== 点管理功能 ==========
+
+    def record_current_point(self):
+        """记录当前十字准星位置的点"""
+        if self.current_x is None or self.current_y is None:
+            self.show_warning("提示", "请先在上方图片中点击选择一个位置")
+            return
+
+        # 添加点
+        if self.point_manager.add_point(self.current_x, self.current_y):
+            self.update_point_list()
+            self.refresh_top_image()
+            self.show_status_message(f"已记录点 ({self.current_x}, {self.current_y})")
+        else:
+            self.show_warning("提示", f"点 ({self.current_x}, {self.current_y}) 已存在")
+
+    def delete_point(self, index):
+        """删除指定索引的点"""
+        if self.point_manager.remove_point(index):
+            self.update_point_list()
+            self.refresh_top_image()
+            self.show_status_message(f"已删除点 {index + 1}")
+
+    def clear_all_points(self):
+        """清空所有点"""
+        if not self.point_manager.points:
+            return
+
+        # 确认对话框
+        reply = QMessageBox.question(
+            self,
+            "确认清空",
+            "确定要删除所有已记录的点吗？",
+            QMessageBox.Yes | QMessageBox.No,
+            QMessageBox.No
+        )
+
+        if reply == QMessageBox.Yes:
+            self.point_manager.clear_points()
+            self.update_point_list()
+            self.refresh_top_image()
+            self.show_status_message("已清空所有点")
+
+    def update_point_list(self):
+        """更新点列表显示"""
+        self.point_list_widget.clear()
+
+        points = self.point_manager.get_points()
+
+        for i, (x, y) in enumerate(points):
+            # 创建自定义列表项
+            item = QListWidgetItem(self.point_list_widget)
+            item_widget = PointListItem(i, x, y, self.delete_point)
+            item.setSizeHint(item_widget.sizeHint())
+            self.point_list_widget.addItem(item)
+            self.point_list_widget.setItemWidget(item, item_widget)
+
+        # 更新统计信息
+        count = len(points)
+        self.point_count_label.setText(f"总计: {count} 个点")
+
+        # 更新按钮状态
+        self.clear_points_btn.setEnabled(count > 0)
+
+        # 如果有记录的点，高亮显示列表
+        if count > 0:
+            self.point_list_widget.setStyleSheet("""
+                QListWidget {
+                    border: 1px solid #4CAF50;
+                    border-radius: 4px;
+                    background: white;
+                    min-height: 150px;
+                    max-height: 200px;
+                }
+                QListWidget::item {
+                    padding: 2px;
+                    border-bottom: 1px solid #eeeeee;
+                }
+                QListWidget::item:selected {
+                    background: #e3f2fd;
+                }
+            """)
+        else:
+            self.point_list_widget.setStyleSheet("""
+                QListWidget {
+                    border: 1px solid #cccccc;
+                    border-radius: 4px;
+                    background: white;
+                    min-height: 150px;
+                    max-height: 200px;
+                }
+                QListWidget::item {
+                    padding: 2px;
+                    border-bottom: 1px solid #eeeeee;
+                }
+                QListWidget::item:selected {
+                    background: #e3f2fd;
+                }
+            """)
+
+    def refresh_top_image(self):
+        """刷新上方图片显示（重新绘制所有点）"""
+        if self.current_x is not None and self.current_y is not None:
+            self.draw_crosshair(self.current_x, self.current_y)
+        else:
+            self.update_top_display()
+
+    def show_status_message(self, message):
+        """在状态栏显示消息（这里用info_label临时显示）"""
+        original_style = self.info_label.styleSheet()
+        original_text = self.info_label.text()
+
+        self.info_label.setText(f"✓ {message}")
+        self.info_label.setStyleSheet("background: #C8E6C9; color: #2E7D32;")
+
+        # 3秒后恢复
+        from PySide6.QtCore import QTimer
+        QTimer.singleShot(3000, lambda: self.restore_info_label(original_style, original_text))
+
+    def restore_info_label(self, style, text):
+        """恢复信息标签"""
+        self.info_label.setStyleSheet(style)
+        self.info_label.setText(text)
+
+
+# 保持原有的 PathLineEdit 和 ClickableImageLabel 类不变
+class PathLineEdit(QLineEdit):
+    def __init__(self, double_click_handler, parent=None):
+        super().__init__(parent)
+        self.double_click_handler = double_click_handler
+        self.setReadOnly(True)
+
+    def mouseDoubleClickEvent(self, event):
+        if event.button() == Qt.LeftButton:
+            self.double_click_handler()
+        super().mouseDoubleClickEvent(event)
+
+
+class ClickableImageLabel(QLabel):
+    def __init__(self, click_handler, parent=None):
+        super().__init__(parent)
+        self.click_handler = click_handler
+        self.setAlignment(Qt.AlignLeft | Qt.AlignTop)
+        self.setFrameShape(QFrame.Panel)
+        self.setFrameShadow(QFrame.Sunken)
+        self.setLineWidth(2)
+        self.setStyleSheet("background: white;")
+        self.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
+
+    def mousePressEvent(self, event):
+        if event.button() == Qt.LeftButton:
+            self.click_handler(event.position().x(), event.position().y())
+        super().mousePressEvent(event)
