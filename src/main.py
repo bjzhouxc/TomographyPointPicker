@@ -8,6 +8,3 @@ def main():
     viewer = ImageViewerApp()
     viewer.show()
     sys.exit(app.exec())
-
-if __name__ == "__main__":
-    main()
