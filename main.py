@@ -1,10 +1,9 @@
-import sys
-from PySide6.QtWidgets import QApplication
-from src.viewer import ImageViewerApp
+#!/usr/bin/env python3
+"""
+Tomography Point Picker - 主程序入口
+"""
 
+from src.main import main
 
 if __name__ == "__main__":
-    app = QApplication(sys.argv)
-    viewer = ImageViewerApp()
-    viewer.show()
-    sys.exit(app.exec())
+    main()
