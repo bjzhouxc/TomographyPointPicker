@@ -21,20 +21,15 @@ class ImageUtils:
 
         resized_image = Image.new("RGB", (target_width, target_height), (255, 255, 255))
 
-        width, height = image.size
-        ratio = min(target_width / width, target_height / height)
-        new_width = int(width * ratio)
-        new_height = int(height * ratio)
+        scaled_image = image.resize(target_size, Image.Resampling.LANCZOS)
 
-        scaled_image = image.resize((new_width, new_height), Image.Resampling.LANCZOS)
-
-        x = (target_width - new_width) // 2
-        y = (target_height - new_height) // 2
+        x = (target_width - target_width) // 2
+        y = (target_height - target_height) // 2
         resized_image.paste(scaled_image, (x, y))
 
         display_info = {
-            "display_width": new_width,
-            "display_height": new_height,
+            "display_width": target_width,
+            "display_height": target_height,
             "offset_x": x,
             "offset_y": y,
         }
@@ -64,6 +59,10 @@ class ImageUtils:
     @staticmethod
     def draw_vertical_line(image, x, color=(0, 255, 0), width=2):
         """在图片上绘制垂直线"""
+        # 确保图片是 RGB 模式
+        if image.mode != 'RGB':
+            image = image.convert('RGB')
+
         draw = ImageDraw.Draw(image)
         line_x = x - 1
         draw.line([(line_x, 0), (line_x, image.height - 1)], fill=color, width=width)

@@ -125,6 +125,23 @@ class ImageViewerApp(QWidget):
         self.opacity_value_label.setFixedWidth(40)
         opacity_layout.addWidget(self.opacity_value_label)
 
+        # ---- 侧面图压缩控制 ----
+        compress_layout = QHBoxLayout()
+        left_layout.addLayout(compress_layout)
+
+        compress_label = QLabel("侧面图压缩:")
+        compress_layout.addWidget(compress_label)
+
+        self.compress_slider = QSlider(Qt.Horizontal)
+        self.compress_slider.setRange(1, 100)  # 1% - 100%
+        self.compress_slider.setValue(100)
+        self.compress_slider.valueChanged.connect(self.on_compress_changed)
+        compress_layout.addWidget(self.compress_slider)
+
+        self.compress_value_label = QLabel("100%")
+        self.compress_value_label.setFixedWidth(40)
+        compress_layout.addWidget(self.compress_value_label)
+
         # ---- 点管理区域 ----
         self.setup_point_management(left_layout)
 
@@ -405,6 +422,13 @@ class ImageViewerApp(QWidget):
         self.opacity_value_label.setText(f"{value}%")
         self.update_top_display()
 
+    def on_compress_changed(self, value):
+        """压缩滑块变化时的处理"""
+        self.controller.set_compress_ratio(value / 100)
+        self.compress_value_label.setText(f"{value}%")
+        # 重新加载当前底部图片
+        self.switch_bottom_image_by_y(self.controller.current_y)
+
     def draw_crosshair(self, x_coord, y_coord):
         if self.controller.base_image is None and self.controller.top_image is None:
             return
@@ -477,6 +501,13 @@ class ImageViewerApp(QWidget):
             return
 
         img_copy = self.controller.bottom_image.copy()
+
+        # 确保 x_coord 在图片宽度范围内
+        if x_coord >= img_copy.width:
+            x_coord = img_copy.width - 1
+        if x_coord < 0:
+            x_coord = 0
+
         ImageUtils.draw_vertical_line(img_copy, x_coord)
 
         self.controller.bottom_line_image = img_copy
@@ -492,6 +523,8 @@ class ImageViewerApp(QWidget):
         self.bottom_line_photo = self.bottom_display_photo
 
     def switch_bottom_image_by_y(self, y_coord):
+        if not y_coord:
+            y_coord = 1
         if not self.controller.bottom_image_paths:
             return
 
@@ -500,7 +533,8 @@ class ImageViewerApp(QWidget):
         if self.controller.switch_bottom_image_by_y(y_coord):
             index = y_coord - 1
             total = len(self.controller.bottom_image_paths)
-            self.info_label.setText(f"图片{index + 1}/{total} (Y={y_coord})")
+            compress_value = self.compress_slider.value()
+            self.info_label.setText(f"图片{index + 1}/{total} (Y={y_coord}) 压缩: {compress_value}%")
             self.info_label.setStyleSheet("background: #F0F0F0; color: #2196F3;")
 
             if self.controller.current_x is not None:
@@ -512,6 +546,7 @@ class ImageViewerApp(QWidget):
                 self.controller.bottom_line_image = None
                 self.update_bottom_display()
 
+            # 恢复滚动位置
             self.bottom_scroll_area.verticalScrollBar().setValue(current_scroll_pos)
 
     def update_top_display(self):
@@ -611,6 +646,8 @@ class ImageViewerApp(QWidget):
                 return
 
             if self.controller.load_data_folder(base_path):
+                compress_value = self.compress_slider.value() / 100.0
+                self.controller.set_compress_ratio(compress_value)
                 self.update_top_display()
 
                 if self.controller.current_y is not None:

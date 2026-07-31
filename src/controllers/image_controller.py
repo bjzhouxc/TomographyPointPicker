@@ -39,6 +39,8 @@ class ImageController:
         # 透明度
         self.overlay_opacity = 0
 
+        self.compress_ratio = 1.0  # 压缩比例，1.0 = 100%
+
     def load_top_image(self, image_path: str) -> bool:
         """加载上方图片"""
         try:
@@ -128,7 +130,9 @@ class ImageController:
             image_path = self.bottom_image_paths[index]
             original_image = Image.open(image_path)
             resized_image, _ = ImageUtils.resize_and_center_with_info(
-                original_image, (self.app.bottom_width, self.app.bottom_height)
+                original_image, (
+                    self.app.bottom_width, int(self.app.bottom_height*self.get_compress_ratio())
+                )
             )
             self.bottom_image = resized_image
 
@@ -152,3 +156,11 @@ class ImageController:
     def get_point_manager(self) -> PointManager:
         """获取点管理器"""
         return self.point_manager
+
+    def set_compress_ratio(self, ratio: float):
+        """设置压缩比例"""
+        self.compress_ratio = ratio
+
+    def get_compress_ratio(self) -> float:
+        """获取压缩比例"""
+        return self.compress_ratio
