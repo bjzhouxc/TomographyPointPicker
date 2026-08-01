@@ -173,7 +173,25 @@ class ImageViewerApp(QWidget):
         """)
         point_layout = QVBoxLayout(point_group)
 
-        # 按钮行 - 包含颜色选择和记录按钮
+        # ---- 点大小控制 ----
+        size_layout = QHBoxLayout()
+
+        size_label = QLabel("点大小:")
+        size_layout.addWidget(size_label)
+
+        self.point_size_slider = QSlider(Qt.Horizontal)
+        self.point_size_slider.setRange(1, 20)  # 1-20像素
+        self.point_size_slider.setValue(5)  # 默认5
+        self.point_size_slider.valueChanged.connect(self.on_point_size_changed)
+        size_layout.addWidget(self.point_size_slider)
+
+        self.point_size_label = QLabel("5px")
+        self.point_size_label.setFixedWidth(40)
+        size_layout.addWidget(self.point_size_label)
+
+        point_layout.addLayout(size_layout)
+
+        # ---- 按钮行（颜色选择 + 记录 + 清空） ----
         button_layout = QHBoxLayout()
 
         # 颜色选择按钮
@@ -429,6 +447,14 @@ class ImageViewerApp(QWidget):
         # 重新加载当前底部图片
         self.switch_bottom_image_by_y(self.controller.current_y)
 
+    def on_point_size_changed(self, value):
+        """点大小滑块变化时的处理"""
+        self.point_size_label.setText(f"{value}px")
+        # 更新 PointManager 中的点大小
+        self.controller.get_point_manager().set_point_size(value)
+        # 刷新显示
+        self.refresh_top_image()
+
     def draw_crosshair(self, x_coord, y_coord):
         if self.controller.base_image is None and self.controller.top_image is None:
             return
@@ -472,15 +498,13 @@ class ImageViewerApp(QWidget):
         self.draw_bottom_line(x_coord)
 
     def draw_recorded_points(self, draw):
-        """在图片上绘制所有已记录的点（使用当前选中的颜色）"""
+        """在图片上绘制所有已记录的点"""
         points = self.controller.get_point_manager().get_points()
         if not points:
             return
 
-        point_radius = self.controller.get_point_manager().point_size // 2
-
-        for x, y, color in points:
-            # 获取图片尺寸（用于坐标验证）
+        for x, y, color, size in points:  # 解包出坐标、颜色、大小
+            # 获取图片尺寸
             if self.controller.base_image is not None:
                 img_width, img_height = self.controller.base_image.size
             elif self.controller.top_image is not None:
@@ -489,10 +513,10 @@ class ImageViewerApp(QWidget):
                 return
 
             if 0 <= x < img_width and 0 <= y < img_height:
-                # 绘制彩色点（使用当前选中的颜色）
+                radius = size // 2
                 draw.ellipse(
-                    [(x - point_radius, y - point_radius),
-                     (x + point_radius, y + point_radius)],
+                    [(x - radius, y - radius),
+                     (x + radius, y + radius)],
                     fill=color
                 )
 
@@ -669,11 +693,14 @@ class ImageViewerApp(QWidget):
             self.show_warning("提示", "请先在上方图片中点击选择一个位置")
             return
 
-        # 添加点（使用当前颜色）
-        if self.controller.get_point_manager().add_point(x, y, self.point_color):
+        # 获取当前选中的大小
+        current_size = self.point_size_slider.value()
+
+        # 传入颜色和大小
+        if self.controller.get_point_manager().add_point(x, y, self.point_color, current_size):
             self.update_point_list()
             self.refresh_top_image()
-            self.show_status_message(f"已记录点 ({x}, {y}) 颜色: RGB{self.point_color}")
+            self.show_status_message(f"已记录点 ({x}, {y}) 颜色: RGB{self.point_color} 大小: {current_size}px")
         else:
             self.show_warning("提示", f"点 ({x}, {y}) 已存在")
 
@@ -704,14 +731,13 @@ class ImageViewerApp(QWidget):
             self.show_status_message("已清空所有点")
 
     def update_point_list(self):
-        """更新点列表显示"""
         self.point_list_widget.clear()
 
         points = self.controller.get_point_manager().get_points()
 
-        for i, (x, y, color) in enumerate(points):  # 解包出颜色
+        for i, (x, y, color, size) in enumerate(points):  # 解包出大小
             item = QListWidgetItem(self.point_list_widget)
-            item_widget = PointListItem(i, x, y, color, self.delete_point)  # 传入颜色
+            item_widget = PointListItem(i, x, y, color, size, self.delete_point)
             item.setSizeHint(item_widget.sizeHint())
             self.point_list_widget.addItem(item)
             self.point_list_widget.setItemWidget(item, item_widget)
