@@ -1,4 +1,4 @@
-from PIL import Image, ImageDraw, ImageFont
+from PIL import Image, ImageDraw, ImageFont, ImageEnhance
 from PySide6.QtGui import QImage, QPixmap
 
 
@@ -98,3 +98,17 @@ class ImageUtils:
             # 混合显示
             overlay_weight = 1.0 - (opacity / 100.0)
             return Image.blend(base_image, overlay_resized, overlay_weight)
+
+    @staticmethod
+    def adjust_contrast(image, factor):
+        """调整图片对比度
+
+        Args:
+            image: PIL Image
+            factor: 对比度因子，1.0为原图，0.0为纯灰色，2.0为两倍对比度
+        """
+        if factor == 1.0:
+            return image.copy()
+
+        enhancer = ImageEnhance.Contrast(image)
+        return enhancer.enhance(factor)

@@ -36,10 +36,11 @@ class ImageController:
         # 底部图片路径列表
         self.bottom_image_paths: List[str] = []
 
-        # 透明度
+        # 比率相关
         self.overlay_opacity = 0
-
         self.compress_ratio = 1.0  # 压缩比例，1.0 = 100%
+        self.contrast_top = 1.0  # 1.0 = 100%
+        self.contrast_bottom = 1.0
 
     def load_top_image(self, image_path: str) -> bool:
         """加载上方图片"""
@@ -48,6 +49,8 @@ class ImageController:
             resized_image, display_info = ImageUtils.resize_and_center_with_info(
                 original_image, (self.app.top_size, self.app.top_size)
             )
+            # 应用对比度
+            resized_image = ImageUtils.adjust_contrast(resized_image, self.contrast_top)
             self.top_image = resized_image
 
             self.top_display_width = display_info["display_width"]
@@ -134,6 +137,9 @@ class ImageController:
                     self.app.bottom_width, int(self.app.bottom_height*self.get_compress_ratio())
                 )
             )
+            # 应用对比度
+            resized_image = ImageUtils.adjust_contrast(resized_image, self.contrast_bottom)
+
             self.bottom_image = resized_image
 
             # 如果有x坐标，绘制绿线
@@ -164,3 +170,17 @@ class ImageController:
     def get_compress_ratio(self) -> float:
         """获取压缩比例"""
         return self.compress_ratio
+
+    def set_contrast_top(self, value: float):
+        """设置上方图片对比度"""
+        self.contrast_top = max(0.0, min(2.0, value))  # 0-2.0
+
+    def get_contrast_top(self) -> float:
+        return self.contrast_top
+
+    def set_contrast_bottom(self, value: float):
+        """设置下方图片对比度"""
+        self.contrast_bottom = max(0.0, min(2.0, value))
+
+    def get_contrast_bottom(self) -> float:
+        return self.contrast_bottom

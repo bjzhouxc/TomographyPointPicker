@@ -142,6 +142,41 @@ class ImageViewerApp(QWidget):
         self.compress_value_label.setFixedWidth(40)
         compress_layout.addWidget(self.compress_value_label)
 
+        # ---- 对比度控制 ----
+        # 上方图片对比度
+        contrast_top_layout = QHBoxLayout()
+        left_layout.addLayout(contrast_top_layout)
+
+        contrast_top_label = QLabel("上方对比度:")
+        contrast_top_layout.addWidget(contrast_top_label)
+
+        self.contrast_top_slider = QSlider(Qt.Horizontal)
+        self.contrast_top_slider.setRange(0, 200)  # 0% - 200%
+        self.contrast_top_slider.setValue(100)  # 默认100%
+        self.contrast_top_slider.valueChanged.connect(self.on_contrast_top_changed)
+        contrast_top_layout.addWidget(self.contrast_top_slider)
+
+        self.contrast_top_value_label = QLabel("100%")
+        self.contrast_top_value_label.setFixedWidth(40)
+        contrast_top_layout.addWidget(self.contrast_top_value_label)
+
+        # 下方图片对比度
+        contrast_bottom_layout = QHBoxLayout()
+        left_layout.addLayout(contrast_bottom_layout)
+
+        contrast_bottom_label = QLabel("下方对比度:")
+        contrast_bottom_layout.addWidget(contrast_bottom_label)
+
+        self.contrast_bottom_slider = QSlider(Qt.Horizontal)
+        self.contrast_bottom_slider.setRange(0, 200)
+        self.contrast_bottom_slider.setValue(100)
+        self.contrast_bottom_slider.valueChanged.connect(self.on_contrast_bottom_changed)
+        contrast_bottom_layout.addWidget(self.contrast_bottom_slider)
+
+        self.contrast_bottom_value_label = QLabel("100%")
+        self.contrast_bottom_value_label.setFixedWidth(40)
+        contrast_bottom_layout.addWidget(self.contrast_bottom_value_label)
+
         # ---- 点管理区域 ----
         self.setup_point_management(left_layout)
 
@@ -455,6 +490,21 @@ class ImageViewerApp(QWidget):
         # 刷新显示
         self.refresh_top_image()
 
+    def on_contrast_top_changed(self, value):
+        """上方对比度滑块变化时的处理"""
+        self.contrast_top_value_label.setText(f"{value}%")
+        self.controller.set_contrast_top(value / 100.0)
+        # 刷新上方图片显示
+        self.update_top_display()
+        self.draw_crosshair(self.controller.current_x, self.controller.current_y)
+
+    def on_contrast_bottom_changed(self, value):
+        """下方对比度滑块变化时的处理"""
+        self.contrast_bottom_value_label.setText(f"{value}%")
+        self.controller.set_contrast_bottom(value / 100.0)
+        # 刷新下方图片显示
+        self.switch_bottom_image_by_y(self.controller.current_y)
+
     def draw_crosshair(self, x_coord, y_coord):
         if self.controller.base_image is None and self.controller.top_image is None:
             return
@@ -481,6 +531,8 @@ class ImageViewerApp(QWidget):
 
         if result_image is None:
             return
+
+        result_image = ImageUtils.adjust_contrast(result_image, self.controller.contrast_top)
 
         draw = ImageDraw.Draw(result_image)
 
@@ -578,7 +630,10 @@ class ImageViewerApp(QWidget):
         # 如果没有底座图片，只显示覆盖图或占位图
         if self.controller.base_image is None:
             if self.controller.top_image is not None:
-                self.top_photo = self.set_label_image(self.top_image_label, self.controller.top_image)
+                # 调整对比度
+                result_image = self.controller.top_image.copy()
+                result_image = ImageUtils.adjust_contrast(result_image, self.controller.contrast_top)
+                self.top_photo = self.set_label_image(self.top_image_label, result_image)
             else:
                 self.show_placeholders()
             return
@@ -611,6 +666,7 @@ class ImageViewerApp(QWidget):
             # 绘制已记录的点
             self.draw_recorded_points(draw)
 
+        result_image = ImageUtils.adjust_contrast(result_image, self.controller.contrast_top)
         # 显示图片
         self.top_photo = self.set_label_image(self.top_image_label, result_image)
 
@@ -656,6 +712,9 @@ class ImageViewerApp(QWidget):
                 return
 
             if self.controller.load_top_image(image_path):
+                # 应用当前对比度设置
+                contrast_value = self.contrast_top_slider.value() / 100.0
+                self.controller.set_contrast_top(contrast_value)
                 self.update_top_display()
                 if self.controller.current_x is not None and self.controller.current_y is not None:
                     self.draw_crosshair(self.controller.current_x, self.controller.current_y)
@@ -670,6 +729,12 @@ class ImageViewerApp(QWidget):
                 return
 
             if self.controller.load_data_folder(base_path):
+                # 应用当前对比度设置
+                contrast_top = self.contrast_top_slider.value() / 100.0
+                contrast_bottom = self.contrast_bottom_slider.value() / 100.0
+                self.controller.set_contrast_top(contrast_top)
+                self.controller.set_contrast_bottom(contrast_bottom)
+
                 compress_value = self.compress_slider.value() / 100.0
                 self.controller.set_compress_ratio(compress_value)
                 self.update_top_display()
