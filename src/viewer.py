@@ -349,8 +349,8 @@ class ImageViewerApp(QWidget):
         top_layout.addWidget(self.top_image_label)
         right_layout.addWidget(top_frame, 1)
 
-        # 下方图片显示
-        bottom_frame = QGroupBox("下方图片")
+        # 下方图片显示 - 改为 ClickableImageLabel
+        bottom_frame = QGroupBox("下方图片 - 点击更新X坐标")
         bottom_layout = QVBoxLayout(bottom_frame)
         bottom_layout.setContentsMargins(5, 5, 5, 5)
 
@@ -361,14 +361,14 @@ class ImageViewerApp(QWidget):
         self.bottom_scroll_area.setLineWidth(2)
         self.bottom_scroll_area.setStyleSheet("background: white;")
 
-        self.bottom_image_label = QLabel()
+        # 改为 ClickableImageLabel
+        self.bottom_image_label = ClickableImageLabel(self.on_bottom_image_click)
         self.bottom_image_label.setAlignment(Qt.AlignLeft | Qt.AlignTop)
         self.bottom_image_label.setStyleSheet("background: white;")
         self.bottom_scroll_area.setWidget(self.bottom_image_label)
 
         bottom_layout.addWidget(self.bottom_scroll_area)
         right_layout.addWidget(bottom_frame, 1)
-
     # ========== 颜色选择功能 ==========
 
     def choose_point_color(self):
@@ -467,6 +467,67 @@ class ImageViewerApp(QWidget):
         self.draw_crosshair(original_x, original_y)
         self.switch_bottom_image_by_y(original_y)
 
+        self.record_point_btn.setEnabled(True)
+
+    def on_bottom_image_click(self, x, y):
+        """下方图片点击事件 - 更新X坐标"""
+        if self.controller.bottom_image is None:
+            return
+
+        # 获取label的实际尺寸
+        label_width = self.bottom_image_label.width()
+        label_height = self.bottom_image_label.height()
+
+        # 获取滚动条偏移
+        scroll_x = self.bottom_scroll_area.horizontalScrollBar().value()
+        scroll_y = self.bottom_scroll_area.verticalScrollBar().value()
+
+        pixmap = self.bottom_image_label.pixmap()
+        if pixmap is None:
+            return
+
+        pixmap_width = pixmap.width()
+        pixmap_height = pixmap.height()
+
+        if label_width <= 0 or label_height <= 0 or pixmap_width <= 0 or pixmap_height <= 0:
+            return
+
+        # 计算图片在label中实际显示的大小
+        ratio = min(label_width / pixmap_width, label_height / pixmap_height)
+        display_width = int(pixmap_width * ratio)
+        display_height = int(pixmap_height * ratio)
+
+        # 检查是否点击在图片范围内
+        if x < 0 or x >= display_width or y < 0 or y >= display_height:
+            return
+
+        # 获取原始图片的尺寸
+        orig_width, orig_height = self.controller.bottom_image.size
+
+        # 将点击位置映射到原始图片坐标
+        original_x = int((x / display_width) * orig_width)
+        original_y = int((y / display_height) * orig_height)
+
+        # 确保坐标在有效范围内
+        original_x = max(1, min(orig_width, original_x))
+        original_y = max(1, min(orig_height, original_y))
+
+        # 更新 current_x（保持current_y不变）
+        self.controller.current_x = original_x
+        if self.controller.current_y is None:
+            self.controller.current_y = 0
+
+        # 更新窗口标题
+        self.setWindowTitle(f"Tomography Point Picker - X={original_x}, Y={self.controller.current_y}")
+
+        # 刷新上方图片显示十字准星
+        if self.controller.current_y is not None:
+            self.draw_crosshair(original_x, self.controller.current_y)
+
+        # 刷新下方图片的绿线
+        self.draw_bottom_line(original_x)
+
+        # 启用记录按钮
         self.record_point_btn.setEnabled(True)
 
     def on_opacity_changed(self, value):
