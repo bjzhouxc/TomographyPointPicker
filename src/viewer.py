@@ -676,7 +676,10 @@ class ImageViewerApp(QWidget):
         top_layout = QVBoxLayout(top_frame)
         top_layout.setContentsMargins(5, 5, 5, 5)
 
-        self.top_image_label = ClickableImageLabel(self.on_top_image_click)
+        self.top_image_label = ClickableImageLabel(
+            self.on_top_image_click,
+            self.on_top_image_drag  # 新增拖动处理
+        )
         self.top_image_label.setAlignment(Qt.AlignLeft | Qt.AlignTop)
         top_layout.addWidget(self.top_image_label)
         right_layout.addWidget(top_frame, 1)
@@ -694,7 +697,10 @@ class ImageViewerApp(QWidget):
         self.bottom_scroll_area.setStyleSheet("background: white;")
 
         # 改为 ClickableImageLabel
-        self.bottom_image_label = ClickableImageLabel(self.on_bottom_image_click)
+        self.bottom_image_label = ClickableImageLabel(
+            self.on_bottom_image_click,
+            self.on_bottom_image_drag  # 新增拖动处理
+        )
         self.bottom_image_label.setAlignment(Qt.AlignLeft | Qt.AlignTop)
         self.bottom_image_label.setStyleSheet("background: white;")
         self.bottom_scroll_area.setWidget(self.bottom_image_label)
@@ -751,114 +757,20 @@ class ImageViewerApp(QWidget):
         self.bottom_placeholder_photo = self.set_label_image(self.bottom_image_label, bottom_placeholder)
 
     def on_top_image_click(self, x, y):
-        if self.controller.top_image is None and self.controller.base_image is None:
-            return
+        """上方图片点击事件"""
+        self._update_top_coordinate(x, y)
 
-        # 获取label的实际尺寸
-        label_width = self.top_image_label.width()
-        label_height = self.top_image_label.height()
-
-        pixmap = self.top_image_label.pixmap()
-        if pixmap is None:
-            return
-
-        pixmap_width = pixmap.width()
-        pixmap_height = pixmap.height()
-
-        if label_width <= 0 or label_height <= 0 or pixmap_width <= 0 or pixmap_height <= 0:
-            return
-
-        ratio = min(label_width / pixmap_width, label_height / pixmap_height)
-        display_width = int(pixmap_width * ratio)
-        display_height = int(pixmap_height * ratio)
-
-        offset_x = self.controller.top_offset_x
-        offset_y = self.controller.top_offset_y
-
-        img_x = x - offset_x
-        img_y = y - offset_y
-
-        if img_x < 0 or img_x >= display_width or img_y < 0 or img_y >= display_height:
-            return
-
-        if self.controller.base_image is not None:
-            orig_width, orig_height = self.controller.base_image.size
-        elif self.controller.top_image is not None:
-            orig_width, orig_height = self.controller.top_image.size
-        else:
-            return
-
-        original_x = int((img_x / display_width) * orig_width)
-        original_y = int((img_y / display_height) * orig_height)
-
-        original_x = max(1, min(orig_width, original_x))
-        original_y = max(1, min(orig_height, original_y))
-
-        self.controller.set_coordinate(original_x, original_y)
-
-        self.draw_crosshair(original_x, original_y)
-        self.switch_bottom_image_by_y(original_y)
-
-        self.record_point_btn.setEnabled(True)
+    def on_top_image_drag(self, x, y):
+        """上方图片拖动事件 - 实时更新坐标"""
+        self._update_top_coordinate(x, y)
 
     def on_bottom_image_click(self, x, y):
-        """下方图片点击事件 - 更新X坐标"""
-        if self.controller.bottom_image is None:
-            return
+        """下方图片点击事件"""
+        self._update_bottom_coordinate(x, y)
 
-        # 获取label的实际尺寸
-        label_width = self.bottom_image_label.width()
-        label_height = self.bottom_image_label.height()
-
-        pixmap = self.bottom_image_label.pixmap()
-        if pixmap is None:
-            return
-
-        pixmap_width = pixmap.width()
-        pixmap_height = pixmap.height()
-
-        if label_width <= 0 or label_height <= 0 or pixmap_width <= 0 or pixmap_height <= 0:
-            return
-
-        # 计算图片在label中实际显示的大小
-        ratio = min(label_width / pixmap_width, label_height / pixmap_height)
-        display_width = int(pixmap_width * ratio)
-        display_height = int(pixmap_height * ratio)
-
-        # 检查是否点击在图片范围内
-        if x < 0 or x >= display_width or y < 0 or y >= display_height:
-            return
-
-        # 获取原始图片的尺寸
-        orig_width, orig_height = self.controller.bottom_image.size
-
-        # 将点击位置映射到原始图片坐标
-        original_x = int((x / display_width) * orig_width)
-        original_y = int((y / display_height) * orig_height)
-
-        # 确保坐标在有效范围内
-        original_x = max(1, min(orig_width, original_x))
-        original_y = max(1, min(orig_height, original_y))
-
-        # 更新 current_x（保持current_y不变）
-        self.controller.current_x = original_x
-        self.controller.current_bottom_y = original_y
-        if self.controller.current_y is None:
-            self.controller.current_y = 0
-
-        # 更新窗口标题
-        self.setWindowTitle(f"Tomography Point Picker - X={original_x}, Y={self.controller.current_y}")
-
-        # 刷新上方图片显示十字准星
-        if self.controller.current_y is not None:
-            self.draw_crosshair(original_x, self.controller.current_y)
-
-        # 刷新下方图片的绿线
-        self.draw_bottom_line(original_x)
-
-        # 启用记录按钮（上方和下方）
-        self.record_point_btn.setEnabled(True)
-        self.record_bottom_point_btn.setEnabled(True)  # 新增
+    def on_bottom_image_drag(self, x, y):
+        """下方图片拖动事件 - 实时更新坐标"""
+        self._update_bottom_coordinate(x, y)
 
     def on_opacity_changed(self, value):
         """透明度滑块变化时的处理"""
@@ -1270,3 +1182,104 @@ class ImageViewerApp(QWidget):
         """恢复信息标签"""
         self.info_label.setStyleSheet(style)
         self.info_label.setText(text)
+
+    def _update_top_coordinate(self, x, y):
+        """更新上方图片坐标（供点击和拖动调用）"""
+        if self.controller.top_image is None and self.controller.base_image is None:
+            return
+
+        # 获取label的实际尺寸
+        label_width = self.top_image_label.width()
+        label_height = self.top_image_label.height()
+
+        pixmap = self.top_image_label.pixmap()
+        if pixmap is None:
+            return
+
+        pixmap_width = pixmap.width()
+        pixmap_height = pixmap.height()
+
+        if label_width <= 0 or label_height <= 0 or pixmap_width <= 0 or pixmap_height <= 0:
+            return
+
+        ratio = min(label_width / pixmap_width, label_height / pixmap_height)
+        display_width = int(pixmap_width * ratio)
+        display_height = int(pixmap_height * ratio)
+
+        offset_x = self.controller.top_offset_x
+        offset_y = self.controller.top_offset_y
+
+        img_x = x - offset_x
+        img_y = y - offset_y
+
+        if img_x < 0 or img_x >= display_width or img_y < 0 or img_y >= display_height:
+            return
+
+        if self.controller.base_image is not None:
+            orig_width, orig_height = self.controller.base_image.size
+        elif self.controller.top_image is not None:
+            orig_width, orig_height = self.controller.top_image.size
+        else:
+            return
+
+        original_x = int((img_x / display_width) * orig_width)
+        original_y = int((img_y / display_height) * orig_height)
+
+        original_x = max(1, min(orig_width, original_x))
+        original_y = max(1, min(orig_height, original_y))
+
+        self.controller.set_coordinate(original_x, original_y)
+
+        self.draw_crosshair(original_x, original_y)
+        self.switch_bottom_image_by_y(original_y)
+
+        self.record_point_btn.setEnabled(True)
+
+    def _update_bottom_coordinate(self, x, y):
+        """更新下方图片坐标（供点击和拖动调用）"""
+        if self.controller.bottom_image is None:
+            return
+
+        # 获取label的实际尺寸
+        label_width = self.bottom_image_label.width()
+        label_height = self.bottom_image_label.height()
+
+        pixmap = self.bottom_image_label.pixmap()
+        if pixmap is None:
+            return
+
+        pixmap_width = pixmap.width()
+        pixmap_height = pixmap.height()
+
+        if label_width <= 0 or label_height <= 0 or pixmap_width <= 0 or pixmap_height <= 0:
+            return
+
+        ratio = min(label_width / pixmap_width, label_height / pixmap_height)
+        display_width = int(pixmap_width * ratio)
+        display_height = int(pixmap_height * ratio)
+
+        if x < 0 or x >= display_width or y < 0 or y >= display_height:
+            return
+
+        orig_width, orig_height = self.controller.bottom_image.size
+
+        original_x = int((x / display_width) * orig_width)
+        original_y = int((y / display_height) * orig_height)
+
+        original_x = max(1, min(orig_width, original_x))
+        original_y = max(1, min(orig_height, original_y))
+
+        self.controller.current_x = original_x
+        self.controller.current_bottom_y = original_y
+        if self.controller.current_y is None:
+            self.controller.current_y = 0
+
+        self.setWindowTitle(f"Tomography Point Picker - X={original_x}, Y={self.controller.current_y}")
+
+        if self.controller.current_y is not None:
+            self.draw_crosshair(original_x, self.controller.current_y)
+
+        self.draw_bottom_line(original_x)
+
+        self.record_point_btn.setEnabled(True)
+        self.record_bottom_point_btn.setEnabled(True)
