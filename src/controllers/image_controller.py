@@ -6,7 +6,7 @@ from typing import Optional, Tuple, List
 from PIL import Image
 from PySide6.QtWidgets import QMessageBox
 
-from ..models import PointManager
+from ..models.point_manager import PointManager, BottomPointManager
 from ..utils import ImageUtils
 
 
@@ -15,7 +15,8 @@ class ImageController:
 
     def __init__(self, app):
         self.app = app
-        self.point_manager = PointManager()
+        self.point_manager = PointManager()          # 上方点管理器
+        self.bottom_point_manager = BottomPointManager()  # 下方点管理器
 
         # 图像数据
         self.top_image: Optional[Image.Image] = None
@@ -32,14 +33,19 @@ class ImageController:
         # 当前坐标
         self.current_x: Optional[int] = None
         self.current_y: Optional[int] = None
+        self.current_bottom_y: Optional[int] = None
 
         # 底部图片路径列表
         self.bottom_image_paths: List[str] = []
 
-        # 比率相关
+        # 透明度
         self.overlay_opacity = 0
-        self.compress_ratio = 1.0  # 压缩比例，1.0 = 100%
-        self.contrast_top = 1.0  # 1.0 = 100%
+
+        # 压缩比例
+        self.compress_ratio = 1.0
+
+        # 对比度
+        self.contrast_top = 1.0
         self.contrast_bottom = 1.0
 
     def load_top_image(self, image_path: str) -> bool:
@@ -184,3 +190,11 @@ class ImageController:
 
     def get_contrast_bottom(self) -> float:
         return self.contrast_bottom
+
+    def get_bottom_point_manager(self) -> BottomPointManager:
+        """获取下方点管理器"""
+        return self.bottom_point_manager
+
+    def get_compressed_height(self) -> int:
+        """获取压缩后的高度"""
+        return int(self.app.bottom_height * self.compress_ratio)

@@ -2,19 +2,30 @@ from typing import Tuple
 from PySide6.QtWidgets import QWidget, QHBoxLayout, QLabel, QPushButton
 
 class PointListItem(QWidget):
-    def __init__(self, index: int, x: int, y: int, color: Tuple[int, int, int], size: int, delete_callback,
-                 parent=None):
+    def __init__(self, index: int, x: int, y: int, color: Tuple[int, int, int], size: int,
+                 delete_callback, source: str = "top", parent=None):
+        """
+        Args:
+            source: "top" 或 "bottom"
+        """
         super().__init__(parent)
         self.index = index
         self.x = x
         self.y = y
         self.color = color
         self.size = size
+        self.source = source
         self.delete_callback = delete_callback
 
         layout = QHBoxLayout(self)
         layout.setContentsMargins(5, 2, 5, 2)
         layout.setSpacing(5)
+
+        # 来源标识
+        self.source_label = QLabel("📷" if source == "top" else "📄")
+        self.source_label.setFixedWidth(20)
+        self.source_label.setToolTip("上方图" if source == "top" else "下方图")
+        layout.addWidget(self.source_label)
 
         # 颜色指示器
         self.color_indicator = QLabel()

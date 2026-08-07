@@ -52,6 +52,8 @@ class ImageViewerApp(QWidget):
 
         # 当前选中的点颜色（默认红色）
         self.point_color = (0, 255, 0)
+        # 下方点颜色（默认蓝色）
+        self.bottom_point_color = (0, 100, 255)
 
         self.setup_ui()
         self.show_placeholders()
@@ -133,7 +135,7 @@ class ImageViewerApp(QWidget):
         compress_layout.addWidget(compress_label)
 
         self.compress_slider = QSlider(Qt.Horizontal)
-        self.compress_slider.setRange(1, 100)  # 1% - 100%
+        self.compress_slider.setRange(1, 100)
         self.compress_slider.setValue(100)
         self.compress_slider.valueChanged.connect(self.on_compress_changed)
         compress_layout.addWidget(self.compress_slider)
@@ -143,7 +145,6 @@ class ImageViewerApp(QWidget):
         compress_layout.addWidget(self.compress_value_label)
 
         # ---- 对比度控制 ----
-        # 上方图片对比度
         contrast_top_layout = QHBoxLayout()
         left_layout.addLayout(contrast_top_layout)
 
@@ -151,8 +152,8 @@ class ImageViewerApp(QWidget):
         contrast_top_layout.addWidget(contrast_top_label)
 
         self.contrast_top_slider = QSlider(Qt.Horizontal)
-        self.contrast_top_slider.setRange(0, 200)  # 0% - 200%
-        self.contrast_top_slider.setValue(100)  # 默认100%
+        self.contrast_top_slider.setRange(0, 200)
+        self.contrast_top_slider.setValue(100)
         self.contrast_top_slider.valueChanged.connect(self.on_contrast_top_changed)
         contrast_top_layout.addWidget(self.contrast_top_slider)
 
@@ -160,7 +161,6 @@ class ImageViewerApp(QWidget):
         self.contrast_top_value_label.setFixedWidth(40)
         contrast_top_layout.addWidget(self.contrast_top_value_label)
 
-        # 下方图片对比度
         contrast_bottom_layout = QHBoxLayout()
         left_layout.addLayout(contrast_bottom_layout)
 
@@ -177,8 +177,11 @@ class ImageViewerApp(QWidget):
         self.contrast_bottom_value_label.setFixedWidth(40)
         contrast_bottom_layout.addWidget(self.contrast_bottom_value_label)
 
-        # ---- 点管理区域 ----
-        self.setup_point_management(left_layout)
+        # ---- 上方点管理区域 ----
+        self.setup_top_point_management(left_layout)
+
+        # ---- 下方点管理区域 ----
+        self.setup_bottom_point_management(left_layout)
 
         # 绑定回车键
         self.url_entry_top.returnPressed.connect(lambda: self.load_image("top_only"))
@@ -189,13 +192,13 @@ class ImageViewerApp(QWidget):
         # ----- 右侧图片显示区域 -----
         self.setup_image_display(root_layout)
 
-    def setup_point_management(self, parent_layout):
-        """设置点管理区域"""
-        point_group = QGroupBox("标注点管理")
+    def setup_top_point_management(self, parent_layout):
+        """设置上方点管理区域"""
+        point_group = QGroupBox("📷 上方图片点管理")
         point_group.setStyleSheet("""
             QGroupBox {
                 font-weight: bold;
-                border: 1px solid #cccccc;
+                border: 1px solid #4CAF50;
                 border-radius: 5px;
                 margin-top: 10px;
                 padding-top: 10px;
@@ -204,6 +207,7 @@ class ImageViewerApp(QWidget):
                 subcontrol-origin: margin;
                 left: 10px;
                 padding: 0 5px 0 5px;
+                color: #2E7D32;
             }
         """)
         point_layout = QVBoxLayout(point_group)
@@ -215,8 +219,8 @@ class ImageViewerApp(QWidget):
         size_layout.addWidget(size_label)
 
         self.point_size_slider = QSlider(Qt.Horizontal)
-        self.point_size_slider.setRange(1, 20)  # 1-20像素
-        self.point_size_slider.setValue(5)  # 默认5
+        self.point_size_slider.setRange(1, 20)
+        self.point_size_slider.setValue(5)
         self.point_size_slider.valueChanged.connect(self.on_point_size_changed)
         size_layout.addWidget(self.point_size_slider)
 
@@ -226,7 +230,7 @@ class ImageViewerApp(QWidget):
 
         point_layout.addLayout(size_layout)
 
-        # ---- 按钮行（颜色选择 + 记录 + 清空） ----
+        # ---- 按钮行 ----
         button_layout = QHBoxLayout()
 
         # 颜色选择按钮
@@ -311,8 +315,8 @@ class ImageViewerApp(QWidget):
                 border: 1px solid #cccccc;
                 border-radius: 4px;
                 background: white;
-                min-height: 150px;
-                max-height: 200px;
+                min-height: 100px;
+                max-height: 150px;
             }
             QListWidget::item {
                 padding: 2px;
@@ -330,6 +334,334 @@ class ImageViewerApp(QWidget):
         point_layout.addWidget(self.point_count_label)
 
         parent_layout.addWidget(point_group)
+
+    def setup_bottom_point_management(self, parent_layout):
+        """设置下方点管理区域"""
+        point_group = QGroupBox("📄 下方图片点管理")
+        point_group.setStyleSheet("""
+            QGroupBox {
+                font-weight: bold;
+                border: 1px solid #2196F3;
+                border-radius: 5px;
+                margin-top: 10px;
+                padding-top: 10px;
+            }
+            QGroupBox::title {
+                subcontrol-origin: margin;
+                left: 10px;
+                padding: 0 5px 0 5px;
+                color: #0D47A1;
+            }
+        """)
+        point_layout = QVBoxLayout(point_group)
+
+        # ---- 点大小控制 ----
+        size_layout = QHBoxLayout()
+
+        size_label = QLabel("点大小:")
+        size_layout.addWidget(size_label)
+
+        self.bottom_point_size_slider = QSlider(Qt.Horizontal)
+        self.bottom_point_size_slider.setRange(1, 20)
+        self.bottom_point_size_slider.setValue(5)
+        self.bottom_point_size_slider.valueChanged.connect(self.on_bottom_point_size_changed)
+        size_layout.addWidget(self.bottom_point_size_slider)
+
+        self.bottom_point_size_label = QLabel("5px")
+        self.bottom_point_size_label.setFixedWidth(40)
+        size_layout.addWidget(self.bottom_point_size_label)
+
+        point_layout.addLayout(size_layout)
+
+        # ---- 按钮行 ----
+        button_layout = QHBoxLayout()
+
+        # 颜色选择按钮
+        self.bottom_color_picker_btn = QPushButton("🎨")
+        self.bottom_color_picker_btn.setFixedSize(32, 32)
+        self.bottom_color_picker_btn.setStyleSheet(f"""
+            QPushButton {{
+                background: rgb({self.bottom_point_color[0]}, {self.bottom_point_color[1]}, {self.bottom_point_color[2]});
+                border-radius: 4px;
+                font-size: 16px;
+            }}
+            QPushButton:hover {{
+                border: 2px solid #666666;
+            }}
+        """)
+        self.bottom_color_picker_btn.setToolTip("选择点的颜色")
+        self.bottom_color_picker_btn.clicked.connect(self.choose_bottom_point_color)
+        button_layout.addWidget(self.bottom_color_picker_btn)
+
+        # 记录点按钮
+        self.record_bottom_point_btn = QPushButton("📌 记录该点")
+        self.record_bottom_point_btn.setStyleSheet("""
+            QPushButton {
+                background: #2196F3;
+                color: white;
+                padding: 6px 12px;
+                border: none;
+                border-radius: 4px;
+                font-weight: bold;
+            }
+            QPushButton:hover {
+                background: #1976D2;
+            }
+            QPushButton:pressed {
+                background: #0D47A1;
+            }
+            QPushButton:disabled {
+                background: #cccccc;
+                color: #666666;
+            }
+        """)
+        self.record_bottom_point_btn.clicked.connect(self.record_bottom_current_point)
+        self.record_bottom_point_btn.setEnabled(False)
+        button_layout.addWidget(self.record_bottom_point_btn)
+
+        # 清空所有点按钮
+        self.clear_bottom_points_btn = QPushButton("🗑 清空所有")
+        self.clear_bottom_points_btn.setStyleSheet("""
+            QPushButton {
+                background: #ff6b6b;
+                color: white;
+                padding: 6px 12px;
+                border: none;
+                border-radius: 4px;
+                font-weight: bold;
+            }
+            QPushButton:hover {
+                background: #ff5252;
+            }
+            QPushButton:pressed {
+                background: #e04848;
+            }
+            QPushButton:disabled {
+                background: #cccccc;
+                color: #666666;
+            }
+        """)
+        self.clear_bottom_points_btn.clicked.connect(self.clear_all_bottom_points)
+        self.clear_bottom_points_btn.setEnabled(False)
+        button_layout.addWidget(self.clear_bottom_points_btn)
+
+        point_layout.addLayout(button_layout)
+
+        # 点列表
+        list_label = QLabel("已记录的点 (显示原始坐标):")
+        list_label.setStyleSheet("font-weight: bold; color: #555555; margin-top: 5px;")
+        point_layout.addWidget(list_label)
+
+        self.bottom_point_list_widget = QListWidget()
+        self.bottom_point_list_widget.setStyleSheet("""
+            QListWidget {
+                border: 1px solid #cccccc;
+                border-radius: 4px;
+                background: white;
+                min-height: 100px;
+                max-height: 150px;
+            }
+            QListWidget::item {
+                padding: 2px;
+                border-bottom: 1px solid #eeeeee;
+            }
+            QListWidget::item:selected {
+                background: #e3f2fd;
+            }
+        """)
+        self.bottom_point_list_widget.setSpacing(1)
+        point_layout.addWidget(self.bottom_point_list_widget)
+
+        self.bottom_point_count_label = QLabel("总计: 0 个点")
+        self.bottom_point_count_label.setStyleSheet("color: #666666; font-size: 11px;")
+        point_layout.addWidget(self.bottom_point_count_label)
+
+        parent_layout.addWidget(point_group)
+
+    # ========== 下方点颜色选择 ==========
+
+    def choose_bottom_point_color(self):
+        """打开颜色选择对话框（下方点）"""
+        current_color = QColor(self.bottom_point_color[0], self.bottom_point_color[1], self.bottom_point_color[2])
+        color = QColorDialog.getColor(current_color, self, "选择点的颜色")
+
+        if color.isValid():
+            self.bottom_point_color = (color.red(), color.green(), color.blue())
+            self.bottom_color_picker_btn.setStyleSheet(f"""
+                QPushButton {{
+                    background: rgb({self.bottom_point_color[0]}, {self.bottom_point_color[1]}, {self.bottom_point_color[2]});
+                    border-radius: 4px;
+                    font-size: 16px;
+                }}
+                QPushButton:hover {{
+                    border: 2px solid #666666;
+                }}
+            """)
+
+    # ========== 下方点大小变化 ==========
+
+    def on_bottom_point_size_changed(self, value):
+        """下方点大小滑块变化时的处理"""
+        self.bottom_point_size_label.setText(f"{value}px")
+
+    # ========== 下方点管理功能 ==========
+
+    def record_bottom_current_point(self):
+        """记录当前下方图片点击位置的点"""
+        if self.controller.current_x is None or self.controller.current_bottom_y is None:
+            self.show_warning("提示", "请先在下方的图中点击选择一个位置")
+            return
+
+        x = self.controller.current_x
+        y = int(self.controller.current_bottom_y / self.controller.compress_ratio)
+        current_size = self.bottom_point_size_slider.value()
+
+        if self.controller.get_bottom_point_manager().add_point(x, y, self.bottom_point_color, current_size):
+            self.update_bottom_point_list()
+            self.refresh_bottom_image()
+            self.show_status_message(
+                f"下方已记录点 ({x}, {y}) 颜色: RGB{self.bottom_point_color} 大小: {current_size}px")
+        else:
+            self.show_warning("提示", f"点 ({x}, {y}) 已存在")
+
+    def delete_bottom_point(self, index):
+        """删除指定索引的下方点"""
+        if self.controller.get_bottom_point_manager().remove_point(index):
+            self.update_bottom_point_list()
+            self.refresh_bottom_image()
+            self.show_status_message(f"已删除下方点 {index + 1}")
+
+    def clear_all_bottom_points(self):
+        """清空所有下方点"""
+        if self.controller.get_bottom_point_manager().get_point_count() == 0:
+            return
+
+        reply = QMessageBox.question(
+            self,
+            "确认清空",
+            "确定要删除所有已记录的下方点吗？",
+            QMessageBox.Yes | QMessageBox.No,
+            QMessageBox.No
+        )
+
+        if reply == QMessageBox.Yes:
+            self.controller.get_bottom_point_manager().clear_points()
+            self.update_bottom_point_list()
+            self.refresh_bottom_image()
+            self.show_status_message("已清空所有下方点")
+
+    def update_bottom_point_list(self):
+        """更新下方点列表显示"""
+        self.bottom_point_list_widget.clear()
+
+        points = self.controller.get_bottom_point_manager().get_points()
+
+        for i, (x, y, color, size) in enumerate(points):
+            item = QListWidgetItem(self.bottom_point_list_widget)
+            item_widget = PointListItem(i, x, y, color, size, self.delete_bottom_point, "bottom")
+            item.setSizeHint(item_widget.sizeHint())
+            self.bottom_point_list_widget.addItem(item)
+            self.bottom_point_list_widget.setItemWidget(item, item_widget)
+
+        count = len(points)
+        self.bottom_point_count_label.setText(f"总计: {count} 个点")
+        self.clear_bottom_points_btn.setEnabled(count > 0)
+
+        if count > 0:
+            self.bottom_point_list_widget.setStyleSheet("""
+                QListWidget {
+                    border: 1px solid #2196F3;
+                    border-radius: 4px;
+                    background: white;
+                    min-height: 100px;
+                    max-height: 150px;
+                }
+                QListWidget::item {
+                    padding: 2px;
+                    border-bottom: 1px solid #eeeeee;
+                }
+                QListWidget::item:selected {
+                    background: #e3f2fd;
+                }
+            """)
+        else:
+            self.bottom_point_list_widget.setStyleSheet("""
+                QListWidget {
+                    border: 1px solid #cccccc;
+                    border-radius: 4px;
+                    background: white;
+                    min-height: 100px;
+                    max-height: 150px;
+                }
+                QListWidget::item {
+                    padding: 2px;
+                    border-bottom: 1px solid #eeeeee;
+                }
+                QListWidget::item:selected {
+                    background: #e3f2fd;
+                }
+            """)
+
+    def refresh_bottom_image(self):
+        """刷新下方图片显示（重新绘制所有下方点）"""
+        if self.controller.bottom_image is None:
+            return
+
+        # 重新绘制下方图片
+        img_copy = self.controller.bottom_image.copy()
+        draw = ImageDraw.Draw(img_copy)
+
+        # 绘制绿线
+        if self.controller.current_x is not None:
+            # 获取映射后的x坐标
+            orig_width, _ = self.controller.bottom_image.size
+            compress_ratio = self.controller.get_compress_ratio()
+            compressed_height = int(self.controller.app.bottom_height * compress_ratio)
+            scale_x = self.controller.app.bottom_width / orig_width
+            mapped_x = int(self.controller.current_x * scale_x)
+            mapped_x = max(0, min(mapped_x, self.controller.app.bottom_width - 1))
+            draw.line([(mapped_x, 0), (mapped_x, compressed_height - 1)], fill=(0, 255, 0), width=2)
+
+        # 绘制下方点（考虑压缩映射）
+        self.draw_bottom_recorded_points(draw)
+
+        self.controller.bottom_line_image = img_copy
+        self.update_bottom_display_with_line()
+
+    def draw_bottom_recorded_points(self, draw):
+        """在下方图片上绘制所有已记录的点（考虑压缩映射）"""
+        points = self.controller.get_bottom_point_manager().get_points()
+        if not points:
+            return
+
+        compress_ratio = self.controller.get_compress_ratio()
+
+        for x, y, color, size in points:
+            # 获取图片尺寸
+            if self.controller.bottom_image is None:
+                return
+
+            img_width, img_height = self.controller.bottom_image.size
+
+            # 将原始坐标映射到压缩后的显示坐标
+            # X坐标按比例映射
+            orig_width = self.controller.app.bottom_width  # 原始宽度512
+            scale_x = img_width / orig_width
+            display_x = int(x * scale_x)
+
+            # Y坐标按压缩比例映射
+            display_y = int(y * compress_ratio)
+
+            # 确保在有效范围内
+            display_x = max(0, min(display_x, img_width - 1))
+            display_y = max(0, min(display_y, img_height - 1))
+
+            radius = size // 2
+            draw.ellipse(
+                [(display_x - radius, display_y - radius),
+                 (display_x + radius, display_y + radius)],
+                fill=color
+            )
 
     def setup_image_display(self, root_layout):
         """设置图片显示区域"""
@@ -478,10 +810,6 @@ class ImageViewerApp(QWidget):
         label_width = self.bottom_image_label.width()
         label_height = self.bottom_image_label.height()
 
-        # 获取滚动条偏移
-        scroll_x = self.bottom_scroll_area.horizontalScrollBar().value()
-        scroll_y = self.bottom_scroll_area.verticalScrollBar().value()
-
         pixmap = self.bottom_image_label.pixmap()
         if pixmap is None:
             return
@@ -514,6 +842,7 @@ class ImageViewerApp(QWidget):
 
         # 更新 current_x（保持current_y不变）
         self.controller.current_x = original_x
+        self.controller.current_bottom_y = original_y
         if self.controller.current_y is None:
             self.controller.current_y = 0
 
@@ -527,8 +856,9 @@ class ImageViewerApp(QWidget):
         # 刷新下方图片的绿线
         self.draw_bottom_line(original_x)
 
-        # 启用记录按钮
+        # 启用记录按钮（上方和下方）
         self.record_point_btn.setEnabled(True)
+        self.record_bottom_point_btn.setEnabled(True)  # 新增
 
     def on_opacity_changed(self, value):
         """透明度滑块变化时的处理"""
@@ -546,8 +876,6 @@ class ImageViewerApp(QWidget):
     def on_point_size_changed(self, value):
         """点大小滑块变化时的处理"""
         self.point_size_label.setText(f"{value}px")
-        # 更新 PointManager 中的点大小
-        self.controller.get_point_manager().set_point_size(value)
         # 刷新显示
         self.refresh_top_image()
 
@@ -650,6 +978,8 @@ class ImageViewerApp(QWidget):
         self.controller.bottom_line_image = img_copy
         self.update_bottom_display_with_line()
 
+        self.refresh_bottom_image()
+
     def update_bottom_display_with_line(self):
         """更新下方图片的显示（包含绿线）"""
         if self.controller.bottom_line_image is None:
@@ -674,14 +1004,25 @@ class ImageViewerApp(QWidget):
             self.info_label.setText(f"图片{index + 1}/{total} (Y={y_coord}) 压缩: {compress_value}%")
             self.info_label.setStyleSheet("background: #F0F0F0; color: #2196F3;")
 
+            # 重新绘制下方图片（包含绿线和所有下方点）
+            img_copy = self.controller.bottom_image.copy()
+            draw = ImageDraw.Draw(img_copy)
+
+            # 绘制绿线
             if self.controller.current_x is not None:
-                img_copy = self.controller.bottom_image.copy()
-                ImageUtils.draw_vertical_line(img_copy, self.controller.current_x)
-                self.controller.bottom_line_image = img_copy
-                self.update_bottom_display_with_line()
-            else:
-                self.controller.bottom_line_image = None
-                self.update_bottom_display()
+                orig_width, _ = self.controller.bottom_image.size
+                compress_ratio = self.controller.get_compress_ratio()
+                compressed_height = int(self.controller.app.bottom_height * compress_ratio)
+                scale_x = self.controller.app.bottom_width / orig_width
+                mapped_x = int(self.controller.current_x * scale_x)
+                mapped_x = max(0, min(mapped_x, self.controller.app.bottom_width - 1))
+                draw.line([(mapped_x, 0), (mapped_x, compressed_height - 1)], fill=(0, 255, 0), width=2)
+
+            # 绘制下方点
+            self.draw_bottom_recorded_points(draw)
+
+            self.controller.bottom_line_image = img_copy
+            self.update_bottom_display_with_line()
 
             # 恢复滚动位置
             self.bottom_scroll_area.verticalScrollBar().setValue(current_scroll_pos)
