@@ -732,6 +732,65 @@ class ImageViewerApp(QWidget):
         """下方点大小滑块变化时的处理"""
         self.bottom_point_size_label.setText(f"{value}px")
 
+    def on_point_item_double_clicked(self, index, x, y):
+        """上方点列表双击事件 - 跳转到该点位置"""
+        # 更新当前坐标
+        self.controller.set_coordinate(x, y)
+
+        # 刷新上方图片显示（绘制十字准星）
+        self.draw_crosshair(x, y)
+
+        # 切换下方图片到对应的Y坐标
+        self.switch_bottom_image_by_y(y)
+
+        # 启用记录按钮
+        self.record_point_btn.setEnabled(True)
+
+        # 显示状态消息
+        self.show_status_message(f"已跳转到点 {index + 1}: ({x}, {y})")
+
+        # 在列表中高亮显示该条目
+        self.point_list_widget.setCurrentRow(index)
+
+    def on_bottom_point_item_double_clicked(self, index, x, y):
+        """下方点列表双击事件 - 跳转到该点位置"""
+        # 获取当前图片索引
+        current_img_index = self.controller.current_bottom_index
+        if current_img_index is None:
+            return
+
+        # 更新当前坐标（x保持不变，y使用该点的y坐标）
+        self.controller.current_x = x
+        self.controller.current_bottom_y = y * self.controller.compress_ratio
+
+        # 更新当前Y坐标（用于上方图片的十字准星）
+        if self.controller.current_y is None:
+            self.controller.current_y = y
+        else:
+            # 注意：下方点的y是原始坐标，需要确保与当前显示的图片对应
+            # 如果当前显示的图片索引对应的Y坐标就是该点的y坐标
+            self.controller.current_y = y
+
+        # 更新窗口标题
+        self.setWindowTitle(f"Tomography Point Picker - X={x}, Y={y}")
+
+        # 刷新上方图片显示（绘制十字准星）
+        if self.controller.current_x is not None and self.controller.current_y is not None:
+            self.draw_crosshair(self.controller.current_x, self.controller.current_y)
+
+        # 刷新下方图片显示（绘制绿线和点）
+        self.refresh_bottom_image()
+
+        # 启用记录按钮
+        self.record_bottom_point_btn.setEnabled(True)
+        self.record_point_btn.setEnabled(True)
+
+        # 显示状态消息
+        self.show_status_message(f"已跳转到下方点 {index + 1}: ({x}, {y}) (图片 {current_img_index + 1})")
+
+        # 在列表中高亮显示该条目
+        self.bottom_point_list_widget.setCurrentRow(index)
+
     # ========== 下方点管理功能 ==========
 
     def record_bottom_current_point(self):
@@ -829,6 +888,8 @@ class ImageViewerApp(QWidget):
         for i, (x, y, color, size) in enumerate(points):
             item = QListWidgetItem(self.bottom_point_list_widget)
             item_widget = PointListItem(i, x, y, color, size, self.delete_bottom_point, "bottom")
+            # ★★★ 设置双击回调 ★★★
+            item_widget.set_double_click_callback(self.on_bottom_point_item_double_clicked)
             item.setSizeHint(item_widget.sizeHint())
             self.bottom_point_list_widget.addItem(item)
             self.bottom_point_list_widget.setItemWidget(item, item_widget)
@@ -1416,9 +1477,11 @@ class ImageViewerApp(QWidget):
 
         points = self.controller.get_point_manager().get_points()
 
-        for i, (x, y, color, size) in enumerate(points):  # 解包出大小
+        for i, (x, y, color, size) in enumerate(points):
             item = QListWidgetItem(self.point_list_widget)
-            item_widget = PointListItem(i, x, y, color, size, self.delete_point)
+            item_widget = PointListItem(i, x, y, color, size, self.delete_point, "top")
+            # ★★★ 设置双击回调 ★★★
+            item_widget.set_double_click_callback(self.on_point_item_double_clicked)
             item.setSizeHint(item_widget.sizeHint())
             self.point_list_widget.addItem(item)
             self.point_list_widget.setItemWidget(item, item_widget)
@@ -1427,6 +1490,9 @@ class ImageViewerApp(QWidget):
         self.point_count_label.setText(f"总计: {count} 个点")
         self.clear_points_btn.setEnabled(count > 0)
 
+        self._update_export_button_state()
+
+        # 更新样式
         if count > 0:
             self.point_list_widget.setStyleSheet("""
                 QListWidget {
@@ -1461,9 +1527,6 @@ class ImageViewerApp(QWidget):
                     background: #e3f2fd;
                 }
             """)
-
-        # 更新导出按钮状态
-        self._update_export_button_state()
 
     def refresh_top_image(self):
         """刷新上方图片显示（重新绘制所有点）"""
