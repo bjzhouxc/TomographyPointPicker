@@ -58,6 +58,7 @@ class ImageViewerApp(QWidget):
         # 导出按钮引用（将在setup_export_section中创建）
         self.export_btn = None
         self.export_info_label = None
+        self.clear_all_bottom_points_btn = None
 
         self.setup_ui()
         self.show_placeholders()
@@ -425,11 +426,37 @@ class ImageViewerApp(QWidget):
         self.record_bottom_point_btn.setEnabled(False)
         button_layout.addWidget(self.record_bottom_point_btn)
 
-        # 清空所有点按钮
-        self.clear_bottom_points_btn = QPushButton("🗑 清空所有")
+        # 清空当前图片点按钮
+        self.clear_bottom_points_btn = QPushButton("🗑 清空当前")
         self.clear_bottom_points_btn.setStyleSheet("""
+                    QPushButton {
+                        background: #d32f2f;
+                        color: white;
+                        padding: 6px 12px;
+                        border: none;
+                        border-radius: 4px;
+                        font-weight: bold;
+                    }
+                    QPushButton:hover {
+                        background: #c62828;
+                    }
+                    QPushButton:pressed {
+                        background: #b71c1c;
+                    }
+                    QPushButton:disabled {
+                        background: #cccccc;
+                        color: #666666;
+                    }
+                """)
+        self.clear_bottom_points_btn.clicked.connect(self.clear_all_bottom_points)
+        self.clear_bottom_points_btn.setEnabled(False)
+        button_layout.addWidget(self.clear_bottom_points_btn)
+
+        # 清空所有图片点按钮（新增）
+        self.clear_all_bottom_points_btn = QPushButton("🗑 清空全部")
+        self.clear_all_bottom_points_btn.setStyleSheet("""
             QPushButton {
-                background: #ff6b6b;
+                background: #d32f2f;
                 color: white;
                 padding: 6px 12px;
                 border: none;
@@ -437,19 +464,19 @@ class ImageViewerApp(QWidget):
                 font-weight: bold;
             }
             QPushButton:hover {
-                background: #ff5252;
+                background: #c62828;
             }
             QPushButton:pressed {
-                background: #e04848;
+                background: #b71c1c;
             }
             QPushButton:disabled {
                 background: #cccccc;
                 color: #666666;
             }
         """)
-        self.clear_bottom_points_btn.clicked.connect(self.clear_all_bottom_points)
-        self.clear_bottom_points_btn.setEnabled(False)
-        button_layout.addWidget(self.clear_bottom_points_btn)
+        self.clear_all_bottom_points_btn.clicked.connect(self.clear_all_bottom_points_all_images)
+        self.clear_all_bottom_points_btn.setEnabled(False)
+        button_layout.addWidget(self.clear_all_bottom_points_btn)
 
         point_layout.addLayout(button_layout)
 
@@ -586,13 +613,15 @@ class ImageViewerApp(QWidget):
 
     def _generate_export_content(self, top_points, bottom_points) -> str:
         """生成导出内容"""
+        import json
+        from datetime import datetime
+
         lines = []
 
-        # 文件头
         lines.append("=" * 60)
         lines.append("断层扫描点标注数据导出")
         lines.append("=" * 60)
-        lines.append(f"导出时间: {__import__('datetime').datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
+        lines.append(f"导出时间: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
         lines.append("")
 
         # 统计信息
@@ -600,8 +629,9 @@ class ImageViewerApp(QWidget):
         lines.append("统计信息")
         lines.append("-" * 60)
         lines.append(f"上方图片点数: {len(top_points)}")
-        lines.append(f"下方图片点数: {len(bottom_points)}")
-        lines.append(f"总计点数: {len(top_points) + len(bottom_points)}")
+        total_bottom_points = self.controller.get_bottom_point_manager().get_total_point_count()
+        lines.append(f"下方图片总点数: {total_bottom_points}")
+        lines.append(f"总计点数: {len(top_points) + total_bottom_points}")
         lines.append("")
 
         # 上方点数据
@@ -618,39 +648,54 @@ class ImageViewerApp(QWidget):
             lines.append("(无数据)")
         lines.append("")
 
-        # 下方点数据
+        # 下方点数据（按图片索引分组）
         lines.append("-" * 60)
-        lines.append("下方图片点数据 (坐标: 像素)")
+        lines.append("下方图片点数据 (按图片索引分组)")
         lines.append("-" * 60)
-        if bottom_points:
-            lines.append(f"{'序号':<6} {'X坐标':<10} {'Y坐标':<10} {'颜色(R,G,B)':<20} {'大小(px)':<10}")
-            lines.append("-" * 60)
-            for i, (x, y, color, size) in enumerate(bottom_points, 1):
-                color_str = f"({color[0]},{color[1]},{color[2]})"
-                lines.append(f"{i:<6} {x:<10} {y:<10} {color_str:<20} {size:<10}")
+
+        all_bottom_points = self.controller.get_bottom_point_manager().get_points_with_index()
+        if all_bottom_points:
+            total_images = len(self.controller.bottom_image_paths)
+            lines.append(f"总图片数: {total_images}")
+            lines.append(f"有点的图片数: {len(all_bottom_points)}")
+            lines.append("")
+
+            for img_idx in sorted(all_bottom_points.keys()):
+                points = all_bottom_points[img_idx]
+                lines.append(f"图片 {img_idx + 1}:")
+                lines.append(f"  点数: {len(points)}")
+                lines.append(f"  {'序号':<6} {'X坐标':<10} {'Y坐标':<10} {'颜色(R,G,B)':<20} {'大小(px)':<10}")
+                for i, (x, y, color, size) in enumerate(points, 1):
+                    color_str = f"({color[0]},{color[1]},{color[2]})"
+                    lines.append(f"  {i:<6} {x:<10} {y:<10} {color_str:<20} {size:<10}")
+                lines.append("")
         else:
             lines.append("(无数据)")
         lines.append("")
 
-        # JSON格式数据（便于程序读取）
+        # JSON格式数据
         lines.append("-" * 60)
         lines.append("JSON格式数据")
         lines.append("-" * 60)
-        import json
+
         json_data = {
-            "export_time": __import__('datetime').datetime.now().isoformat(),
+            "export_time": datetime.now().isoformat(),
             "top_points": [
                 {"x": x, "y": y, "color": {"r": c[0], "g": c[1], "b": c[2]}, "size": s}
                 for x, y, c, s in top_points
             ],
-            "bottom_points": [
-                {"x": x, "y": y, "color": {"r": c[0], "g": c[1], "b": c[2]}, "size": s}
-                for x, y, c, s in bottom_points
-            ],
+            "bottom_points_by_image": {
+                str(idx + 1): [
+                    {"x": x, "y": y, "color": {"r": c[0], "g": c[1], "b": c[2]}, "size": s}
+                    for x, y, c, s in points
+                ]
+                for idx, points in all_bottom_points.items()
+            },
             "statistics": {
-                "total": len(top_points) + len(bottom_points),
+                "total": len(top_points) + total_bottom_points,
                 "top_count": len(top_points),
-                "bottom_count": len(bottom_points)
+                "bottom_count": total_bottom_points,
+                "images_with_points": len(all_bottom_points)
             }
         }
         lines.append(json.dumps(json_data, indent=2, ensure_ascii=False))
@@ -695,34 +740,48 @@ class ImageViewerApp(QWidget):
             self.show_warning("提示", "请先在下方的图中点击选择一个位置")
             return
 
+        if self.controller.current_bottom_index is None:
+            self.show_warning("提示", "请先加载底部图片")
+            return
+
         x = self.controller.current_x
         y = int(self.controller.current_bottom_y / self.controller.compress_ratio)
         current_size = self.bottom_point_size_slider.value()
+        current_index = self.controller.current_bottom_index
 
         if self.controller.get_bottom_point_manager().add_point(x, y, self.bottom_point_color, current_size):
             self.update_bottom_point_list()
             self.refresh_bottom_image()
             self.show_status_message(
-                f"下方已记录点 ({x}, {y}) 颜色: RGB{self.bottom_point_color} 大小: {current_size}px")
+                f"下方已记录点 (图片{current_index + 1}) ({x}, {y}) 颜色: RGB{self.bottom_point_color} 大小: {current_size}px")
+            # 启用"清空全部"按钮
+            if hasattr(self, 'clear_all_bottom_points_btn'):
+                self.clear_all_bottom_points_btn.setEnabled(True)
         else:
             self.show_warning("提示", f"点 ({x}, {y}) 已存在")
 
     def delete_bottom_point(self, index):
         """删除指定索引的下方点"""
+        if self.controller.current_bottom_index is None:
+            return
+
         if self.controller.get_bottom_point_manager().remove_point(index):
             self.update_bottom_point_list()
             self.refresh_bottom_image()
-            self.show_status_message(f"已删除下方点 {index + 1}")
+            self.show_status_message(f"已删除下方点 {index + 1} (图片{self.controller.current_bottom_index + 1})")
 
     def clear_all_bottom_points(self):
-        """清空所有下方点"""
+        """清空当前图片的所有下方点"""
+        if self.controller.current_bottom_index is None:
+            return
+
         if self.controller.get_bottom_point_manager().get_point_count() == 0:
             return
 
         reply = QMessageBox.question(
             self,
             "确认清空",
-            "确定要删除所有已记录的下方点吗？",
+            f"确定要删除当前图片（索引 {self.controller.current_bottom_index + 1}）的所有已记录的点吗？",
             QMessageBox.Yes | QMessageBox.No,
             QMessageBox.No
         )
@@ -731,13 +790,41 @@ class ImageViewerApp(QWidget):
             self.controller.get_bottom_point_manager().clear_points()
             self.update_bottom_point_list()
             self.refresh_bottom_image()
-            self.show_status_message("已清空所有下方点")
+            self.show_status_message(f"已清空当前图片的所有下方点")
+
+    def clear_all_bottom_points_all_images(self):
+        """清空所有图片的下方点"""
+        if self.controller.get_bottom_point_manager().get_total_point_count() == 0:
+            return
+
+        reply = QMessageBox.question(
+            self,
+            "确认清空",
+            "确定要删除所有图片的所有已记录的点吗？",
+            QMessageBox.Yes | QMessageBox.No,
+            QMessageBox.No
+        )
+
+        if reply == QMessageBox.Yes:
+            self.controller.get_bottom_point_manager().clear_all_points()
+            self.update_bottom_point_list()
+            self.refresh_bottom_image()
+            self.show_status_message("已清空所有图片的所有下方点")
 
     def update_bottom_point_list(self):
         """更新下方点列表显示"""
         self.bottom_point_list_widget.clear()
 
+        # 获取当前图片的点
         points = self.controller.get_bottom_point_manager().get_points()
+        current_index = self.controller.current_bottom_index
+
+        # 显示当前图片索引信息
+        if current_index is not None:
+            total_images = len(self.controller.bottom_image_paths)
+            self.bottom_point_count_label.setText(f"当前图片 {current_index + 1}/{total_images}: {len(points)} 个点")
+        else:
+            self.bottom_point_count_label.setText("未加载图片")
 
         for i, (x, y, color, size) in enumerate(points):
             item = QListWidgetItem(self.bottom_point_list_widget)
@@ -746,11 +833,19 @@ class ImageViewerApp(QWidget):
             self.bottom_point_list_widget.addItem(item)
             self.bottom_point_list_widget.setItemWidget(item, item_widget)
 
-        count = len(points)
-        self.bottom_point_count_label.setText(f"总计: {count} 个点")
-        self.clear_bottom_points_btn.setEnabled(count > 0)
+        # 更新按钮状态
+        current_count = len(points)
+        self.clear_bottom_points_btn.setEnabled(current_count > 0)
 
-        if count > 0:
+        # 检查是否有任何图片有点
+        total_count = self.controller.get_bottom_point_manager().get_total_point_count()
+        if hasattr(self, 'clear_all_bottom_points_btn'):
+            self.clear_all_bottom_points_btn.setEnabled(total_count > 0)
+
+        self._update_export_button_state()
+
+        # 更新样式
+        if current_count > 0:
             self.bottom_point_list_widget.setStyleSheet("""
                 QListWidget {
                     border: 1px solid #2196F3;
@@ -785,22 +880,26 @@ class ImageViewerApp(QWidget):
                 }
             """)
 
-        # 更新导出按钮状态
-        self._update_export_button_state()
-
     def _update_export_button_state(self):
         """更新导出按钮状态"""
-        top_count = self.controller.get_point_manager().get_point_count()
-        bottom_count = self.controller.get_bottom_point_manager().get_point_count()
-        has_data = top_count > 0 or bottom_count > 0
-        self.export_btn.setEnabled(has_data)
+        if not hasattr(self, 'export_btn') or self.export_btn is None:
+            return
 
-        if has_data:
-            self.export_info_label.setText(f"📊 可导出: 上方 {top_count} 个, 下方 {bottom_count} 个")
-            self.export_info_label.setStyleSheet("color: #2E7D32; font-size: 11px; padding: 5px;")
-        else:
-            self.export_info_label.setText("导出: 等待数据...")
-            self.export_info_label.setStyleSheet("color: #666666; font-size: 11px; padding: 5px;")
+        top_count = self.controller.get_point_manager().get_point_count()
+        bottom_count = self.controller.get_bottom_point_manager().get_total_point_count()
+        has_data = top_count > 0 or bottom_count > 0
+
+        try:
+            self.export_btn.setEnabled(has_data)
+
+            if has_data and hasattr(self, 'export_info_label') and self.export_info_label:
+                self.export_info_label.setText(f"📊 可导出: 上方 {top_count} 个, 下方 {bottom_count} 个")
+                self.export_info_label.setStyleSheet("color: #2E7D32; font-size: 11px; padding: 5px;")
+            elif hasattr(self, 'export_info_label') and self.export_info_label:
+                self.export_info_label.setText("导出: 等待数据...")
+                self.export_info_label.setStyleSheet("color: #666666; font-size: 11px; padding: 5px;")
+        except Exception as e:
+            print(f"更新导出按钮状态时出错: {e}")
 
     def refresh_bottom_image(self):
         """刷新下方图片显示（重新绘制所有下方点）"""
@@ -1130,7 +1229,7 @@ class ImageViewerApp(QWidget):
                 mapped_x = max(0, min(mapped_x, self.controller.app.bottom_width - 1))
                 draw.line([(mapped_x, 0), (mapped_x, compressed_height - 1)], fill=(0, 255, 0), width=2)
 
-            # 绘制下方点
+            # 绘制当前图片的下方点
             self.draw_bottom_recorded_points(draw)
 
             self.controller.bottom_line_image = img_copy
@@ -1138,6 +1237,9 @@ class ImageViewerApp(QWidget):
 
             # 恢复滚动位置
             self.bottom_scroll_area.verticalScrollBar().setValue(current_scroll_pos)
+
+            # 更新点列表显示
+            self.update_bottom_point_list()
 
     def update_top_display(self):
         """更新上方图片显示（合并底座和覆盖图）"""

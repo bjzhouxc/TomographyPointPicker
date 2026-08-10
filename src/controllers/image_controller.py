@@ -48,6 +48,9 @@ class ImageController:
         self.contrast_top = 1.0
         self.contrast_bottom = 1.0
 
+        # 当前显示的图片索引（0-based）
+        self.current_bottom_index: Optional[int] = None
+
     def load_top_image(self, image_path: str) -> bool:
         """加载上方图片"""
         try:
@@ -103,8 +106,13 @@ class ImageController:
 
             self.bottom_image_paths = sorted(png_files, key=self._sort_by_number)
 
+            # 初始化底部点管理器，设置第一个图片为当前索引
+            self.current_bottom_index = 0
+            self.bottom_point_manager.set_current_index(0)
+
             self.app.setWindowTitle(f"Tomography Point Picker - Angio + B-scan已加载 ({len(png_files)}张)")
             return True
+
         except Exception as e:
             self.app.show_error("错误", f"加载失败：\n{str(e)}")
             return False
@@ -131,16 +139,21 @@ class ImageController:
         if not self.bottom_image_paths:
             return False
 
+        # 计算图片索引（0-based）
         index = y_coord - 1
         if index < 0 or index >= len(self.bottom_image_paths):
             return False
+
+        # 更新当前索引
+        self.current_bottom_index = index
+        self.bottom_point_manager.set_current_index(index)
 
         try:
             image_path = self.bottom_image_paths[index]
             original_image = Image.open(image_path)
             resized_image, _ = ImageUtils.resize_and_center_with_info(
                 original_image, (
-                    self.app.bottom_width, int(self.app.bottom_height*self.get_compress_ratio())
+                    self.app.bottom_width, int(self.app.bottom_height * self.get_compress_ratio())
                 )
             )
             # 应用对比度
@@ -194,6 +207,10 @@ class ImageController:
     def get_bottom_point_manager(self) -> BottomPointManager:
         """获取下方点管理器"""
         return self.bottom_point_manager
+
+    def get_current_bottom_index(self) -> Optional[int]:
+        """获取当前显示的底部图片索引"""
+        return self.current_bottom_index
 
     def get_compressed_height(self) -> int:
         """获取压缩后的高度"""
