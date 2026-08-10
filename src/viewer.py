@@ -55,6 +55,10 @@ class ImageViewerApp(QWidget):
         # 下方点颜色（默认蓝色）
         self.bottom_point_color = (0, 100, 255)
 
+        # 导出按钮引用（将在setup_export_section中创建）
+        self.export_btn = None
+        self.export_info_label = None
+
         self.setup_ui()
         self.show_placeholders()
 
@@ -186,6 +190,8 @@ class ImageViewerApp(QWidget):
         # 绑定回车键
         self.url_entry_top.returnPressed.connect(lambda: self.load_image("top_only"))
         self.url_entry_bottom.returnPressed.connect(lambda: self.load_image("both"))
+
+        self.setup_export_section(left_layout)
 
         left_layout.addStretch()
 
@@ -478,6 +484,183 @@ class ImageViewerApp(QWidget):
 
         parent_layout.addWidget(point_group)
 
+    def setup_export_section(self, parent_layout):
+        """设置导出功能区域"""
+        export_group = QGroupBox("💾 数据导出")
+        export_group.setStyleSheet("""
+            QGroupBox {
+                font-weight: bold;
+                border: 1px solid #FF9800;
+                border-radius: 5px;
+                margin-top: 10px;
+                padding-top: 10px;
+            }
+            QGroupBox::title {
+                subcontrol-origin: margin;
+                left: 10px;
+                padding: 0 5px 0 5px;
+                color: #E65100;
+            }
+        """)
+        export_layout = QVBoxLayout(export_group)
+
+        # 导出按钮
+        export_btn = QPushButton("📤 一键导出所有数据")
+        export_btn.setStyleSheet("""
+            QPushButton {
+                background: #FF9800;
+                color: white;
+                padding: 10px 20px;
+                border: none;
+                border-radius: 6px;
+                font-weight: bold;
+                font-size: 14px;
+            }
+            QPushButton:hover {
+                background: #F57C00;
+            }
+            QPushButton:pressed {
+                background: #E65100;
+            }
+            QPushButton:disabled {
+                background: #cccccc;
+                color: #666666;
+            }
+        """)
+        export_btn.clicked.connect(self.export_all_data)
+        export_btn.setEnabled(False)
+        export_layout.addWidget(export_btn)
+
+        # 导出信息标签
+        self.export_info_label = QLabel("导出: 等待数据...")
+        self.export_info_label.setStyleSheet("color: #666666; font-size: 11px; padding: 5px;")
+        self.export_info_label.setAlignment(Qt.AlignCenter)
+        export_layout.addWidget(self.export_info_label)
+
+        parent_layout.addWidget(export_group)
+
+        # 保存导出按钮引用以便后续启用/禁用
+        self.export_btn = export_btn
+
+    def export_all_data(self):
+        """导出所有数据到 output.txt"""
+        try:
+            # 获取数据
+            top_points = self.controller.get_point_manager().get_points()
+            bottom_points = self.controller.get_bottom_point_manager().get_points()
+
+            # 检查是否有数据
+            if not top_points and not bottom_points:
+                self.show_warning("提示", "没有可导出的数据！请先记录至少一个点。")
+                return
+
+            # 选择保存路径
+            from PySide6.QtWidgets import QFileDialog
+            file_path, _ = QFileDialog.getSaveFileName(
+                self,
+                "保存导出数据",
+                "output.txt",
+                "文本文件 (*.txt);;所有文件 (*)"
+            )
+
+            if not file_path:
+                return  # 用户取消
+
+            # 生成导出内容
+            export_content = self._generate_export_content(top_points, bottom_points)
+
+            # 写入文件
+            with open(file_path, 'w', encoding='utf-8') as f:
+                f.write(export_content)
+
+            # 更新状态
+            self.export_info_label.setText(f"✅ 导出成功: {os.path.basename(file_path)}")
+            self.export_info_label.setStyleSheet("color: #2E7D32; font-size: 11px; padding: 5px;")
+
+            self.show_status_message(f"数据已导出到 {file_path}")
+
+        except Exception as e:
+            self.show_error("导出失败", f"导出数据时发生错误：\n{str(e)}")
+            self.export_info_label.setText("❌ 导出失败")
+            self.export_info_label.setStyleSheet("color: #C62828; font-size: 11px; padding: 5px;")
+
+    def _generate_export_content(self, top_points, bottom_points) -> str:
+        """生成导出内容"""
+        lines = []
+
+        # 文件头
+        lines.append("=" * 60)
+        lines.append("断层扫描点标注数据导出")
+        lines.append("=" * 60)
+        lines.append(f"导出时间: {__import__('datetime').datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
+        lines.append("")
+
+        # 统计信息
+        lines.append("-" * 60)
+        lines.append("统计信息")
+        lines.append("-" * 60)
+        lines.append(f"上方图片点数: {len(top_points)}")
+        lines.append(f"下方图片点数: {len(bottom_points)}")
+        lines.append(f"总计点数: {len(top_points) + len(bottom_points)}")
+        lines.append("")
+
+        # 上方点数据
+        lines.append("-" * 60)
+        lines.append("上方图片点数据 (坐标: 像素)")
+        lines.append("-" * 60)
+        if top_points:
+            lines.append(f"{'序号':<6} {'X坐标':<10} {'Y坐标':<10} {'颜色(R,G,B)':<20} {'大小(px)':<10}")
+            lines.append("-" * 60)
+            for i, (x, y, color, size) in enumerate(top_points, 1):
+                color_str = f"({color[0]},{color[1]},{color[2]})"
+                lines.append(f"{i:<6} {x:<10} {y:<10} {color_str:<20} {size:<10}")
+        else:
+            lines.append("(无数据)")
+        lines.append("")
+
+        # 下方点数据
+        lines.append("-" * 60)
+        lines.append("下方图片点数据 (坐标: 像素)")
+        lines.append("-" * 60)
+        if bottom_points:
+            lines.append(f"{'序号':<6} {'X坐标':<10} {'Y坐标':<10} {'颜色(R,G,B)':<20} {'大小(px)':<10}")
+            lines.append("-" * 60)
+            for i, (x, y, color, size) in enumerate(bottom_points, 1):
+                color_str = f"({color[0]},{color[1]},{color[2]})"
+                lines.append(f"{i:<6} {x:<10} {y:<10} {color_str:<20} {size:<10}")
+        else:
+            lines.append("(无数据)")
+        lines.append("")
+
+        # JSON格式数据（便于程序读取）
+        lines.append("-" * 60)
+        lines.append("JSON格式数据")
+        lines.append("-" * 60)
+        import json
+        json_data = {
+            "export_time": __import__('datetime').datetime.now().isoformat(),
+            "top_points": [
+                {"x": x, "y": y, "color": {"r": c[0], "g": c[1], "b": c[2]}, "size": s}
+                for x, y, c, s in top_points
+            ],
+            "bottom_points": [
+                {"x": x, "y": y, "color": {"r": c[0], "g": c[1], "b": c[2]}, "size": s}
+                for x, y, c, s in bottom_points
+            ],
+            "statistics": {
+                "total": len(top_points) + len(bottom_points),
+                "top_count": len(top_points),
+                "bottom_count": len(bottom_points)
+            }
+        }
+        lines.append(json.dumps(json_data, indent=2, ensure_ascii=False))
+        lines.append("")
+        lines.append("=" * 60)
+        lines.append("导出完成")
+        lines.append("=" * 60)
+
+        return "\n".join(lines)
+
     # ========== 下方点颜色选择 ==========
 
     def choose_bottom_point_color(self):
@@ -601,6 +784,23 @@ class ImageViewerApp(QWidget):
                     background: #e3f2fd;
                 }
             """)
+
+        # 更新导出按钮状态
+        self._update_export_button_state()
+
+    def _update_export_button_state(self):
+        """更新导出按钮状态"""
+        top_count = self.controller.get_point_manager().get_point_count()
+        bottom_count = self.controller.get_bottom_point_manager().get_point_count()
+        has_data = top_count > 0 or bottom_count > 0
+        self.export_btn.setEnabled(has_data)
+
+        if has_data:
+            self.export_info_label.setText(f"📊 可导出: 上方 {top_count} 个, 下方 {bottom_count} 个")
+            self.export_info_label.setStyleSheet("color: #2E7D32; font-size: 11px; padding: 5px;")
+        else:
+            self.export_info_label.setText("导出: 等待数据...")
+            self.export_info_label.setStyleSheet("color: #666666; font-size: 11px; padding: 5px;")
 
     def refresh_bottom_image(self):
         """刷新下方图片显示（重新绘制所有下方点）"""
@@ -1159,6 +1359,9 @@ class ImageViewerApp(QWidget):
                     background: #e3f2fd;
                 }
             """)
+
+        # 更新导出按钮状态
+        self._update_export_button_state()
 
     def refresh_top_image(self):
         """刷新上方图片显示（重新绘制所有点）"""
