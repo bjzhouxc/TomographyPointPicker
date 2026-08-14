@@ -62,9 +62,11 @@ class ImageViewerApp(QWidget):
         self.move_down_btn = None
         self.load_img_btn = None
 
-        # 导出按钮引用
+        # 导出/导入按钮引用
         self.export_log_btn = None
         self.export_json_btn = None
+        self.import_json_btn = None
+        self.clear_before_import_btn = None
         self.export_info_label = None
 
         self.setup_ui()
@@ -242,8 +244,8 @@ class ImageViewerApp(QWidget):
                 border: 1px solid #cccccc;
                 border-radius: 4px;
                 background: white;
-                min-height: 80px;
-                max-height: 120px;
+                min-height: 60px;
+                max-height: 80px;
             }
             QListWidget::item {
                 padding: 0px;
@@ -553,7 +555,7 @@ class ImageViewerApp(QWidget):
 
     def setup_export_section(self, parent_layout):
         """设置导出功能区域"""
-        export_group = QGroupBox("💾 数据导出")
+        export_group = QGroupBox("💾 数据导入/导出")
         export_group.setStyleSheet("""
             QGroupBox {
                 font-weight: bold;
@@ -582,10 +584,11 @@ class ImageViewerApp(QWidget):
             QPushButton {
                 background: #FF9800;
                 color: white;
-                padding: 6px 12px;
+                padding: 5px 10px;
                 border: none;
                 border-radius: 4px;
                 font-weight: bold;
+                font-size: 11px;
             }
             QPushButton:hover {
                 background: #F57C00;
@@ -629,6 +632,64 @@ class ImageViewerApp(QWidget):
         button_row.addWidget(self.export_json_btn)
 
         export_layout.addLayout(button_row)
+
+        # ---- 导入按钮行 ----
+        import_row = QHBoxLayout()
+        import_row.setSpacing(5)
+
+        # 导入JSON按钮
+        self.import_json_btn = QPushButton("📂 导入JSON")
+        self.import_json_btn.setStyleSheet("""
+            QPushButton {
+                background: #9C27B0;
+                color: white;
+                padding: 6px 12px;
+                border: none;
+                border-radius: 4px;
+                font-weight: bold;
+            }
+            QPushButton:hover {
+                background: #7B1FA2;
+            }
+            QPushButton:pressed {
+                background: #6A1B9A;
+            }
+            QPushButton:disabled {
+                background: #cccccc;
+                color: #666666;
+            }
+        """)
+        self.import_json_btn.clicked.connect(self.import_json_format)
+        self.import_json_btn.setEnabled(True)
+        import_row.addWidget(self.import_json_btn)
+
+        # 清空当前数据按钮（导入前清空）
+        self.clear_before_import_btn = QPushButton("🗑 清空当前数据")
+        self.clear_before_import_btn.setStyleSheet("""
+            QPushButton {
+                background: #f44336;
+                color: white;
+                padding: 6px 12px;
+                border: none;
+                border-radius: 4px;
+                font-weight: bold;
+            }
+            QPushButton:hover {
+                background: #d32f2f;
+            }
+            QPushButton:pressed {
+                background: #b71c1c;
+            }
+            QPushButton:disabled {
+                background: #cccccc;
+                color: #666666;
+            }
+        """)
+        self.clear_before_import_btn.clicked.connect(self.clear_all_data_for_import)
+        self.clear_before_import_btn.setEnabled(True)
+        import_row.addWidget(self.clear_before_import_btn)
+
+        export_layout.addLayout(import_row)
 
         # 导出信息标签
         self.export_info_label = QLabel("导出: 等待数据...")
@@ -1926,3 +1987,193 @@ class ImageViewerApp(QWidget):
 
         # 显示图片
         self.top_photo = self.set_label_image(self.top_image_label, composite)
+
+    def import_json_format(self):
+        """从JSON文件导入数据"""
+        try:
+            import json
+
+            from PySide6.QtWidgets import QFileDialog
+            file_path, _ = QFileDialog.getOpenFileName(
+                self,
+                "选择JSON数据文件",
+                "",
+                "JSON文件 (*.json);;所有文件 (*)"
+            )
+
+            if not file_path:
+                return
+
+            # 读取JSON文件
+            with open(file_path, 'r', encoding='utf-8') as f:
+                json_data = json.load(f)
+
+            # 验证JSON格式
+            if 'export_info' not in json_data or 'paths' not in json_data:
+                self.show_error("导入失败", "无效的JSON文件格式！")
+                return
+
+            # 询问是否清空当前数据
+            reply = QMessageBox.question(
+                self,
+                "确认导入",
+                "导入将覆盖当前所有数据，是否继续？\n\n建议先点击'清空当前数据'按钮",
+                QMessageBox.Yes | QMessageBox.No,
+                QMessageBox.No
+            )
+
+            if reply != QMessageBox.Yes:
+                return
+
+            # 执行导入
+            self._perform_import(json_data)
+
+            self.export_info_label.setText(f"✅ 导入成功: {os.path.basename(file_path)}")
+            self.export_info_label.setStyleSheet("color: #2E7D32; font-size: 11px; padding: 3px;")
+            self.show_status_message(f"数据已从 {os.path.basename(file_path)} 导入")
+
+        except json.JSONDecodeError as e:
+            self.show_error("导入失败", f"JSON解析错误：\n{str(e)}")
+        except Exception as e:
+            self.show_error("导入失败", f"导入数据时发生错误：\n{str(e)}")
+
+    def clear_all_data_for_import(self):
+        """清空所有当前数据（准备导入）"""
+        reply = QMessageBox.question(
+            self,
+            "确认清空",
+            "确定要清空所有当前数据吗？\n\n包括：\n- 所有标注点\n- 所有覆盖图层\n- 但不会清空数据文件夹路径",
+            QMessageBox.Yes | QMessageBox.No,
+            QMessageBox.No
+        )
+
+        if reply == QMessageBox.Yes:
+            # 清空上方点
+            self.controller.get_point_manager().clear_points()
+            self.update_point_list()
+
+            # 清空下方点
+            self.controller.get_bottom_point_manager().clear_all_points()
+            self.update_bottom_point_list()
+
+            # 清空图层
+            self.controller.layer_manager.layers.clear()
+            self.update_layer_list()
+
+            # 刷新显示
+            self.refresh_top_display()
+            self.refresh_bottom_image()
+
+            self.export_info_label.setText("🗑 数据已清空")
+            self.export_info_label.setStyleSheet("color: #FF6F00; font-size: 11px; padding: 3px;")
+            self.show_status_message("所有数据已清空")
+
+    def _perform_import(self, json_data):
+        """执行数据导入"""
+        import os
+        from PIL import Image
+
+        # ===== 1. 导入路径信息 =====
+        paths = json_data.get('paths', {})
+        data_folder = paths.get('data_folder', '')
+
+        # 检查数据文件夹是否存在
+        if data_folder and os.path.exists(data_folder):
+            # 尝试加载数据文件夹
+            self.url_entry_bottom.setText(data_folder)
+            self.controller.load_data_folder(data_folder)
+            self.update_layer_list()
+            self.update_top_display()
+        else:
+            self.show_warning("警告", f"数据文件夹不存在或未提供：\n{data_folder}\n\n跳过数据文件夹加载")
+
+        # ===== 2. 导入覆盖图片 =====
+        overlay_images = paths.get('overlay_images', [])
+        if overlay_images:
+            loaded_count = 0
+            for img_path in overlay_images:
+                if os.path.exists(img_path):
+                    try:
+                        # 加载图片
+                        image = Image.open(img_path)
+                        file_name = os.path.basename(img_path)
+
+                        # 添加到图层
+                        self.controller.layer_manager.add_layer(
+                            image,
+                            opacity=100,
+                            name=file_name,
+                            path=img_path
+                        )
+                        loaded_count += 1
+                    except Exception as e:
+                        print(f"加载图片失败: {img_path}, 错误: {e}")
+                else:
+                    print(f"图片不存在: {img_path}")
+
+            if loaded_count > 0:
+                self.update_layer_list()
+                self.refresh_top_display()
+                self.show_status_message(f"已加载 {loaded_count} 张覆盖图片")
+
+        # ===== 3. 导入上方点 =====
+        top_points = json_data.get('top_points', [])
+        if top_points:
+            point_manager = self.controller.get_point_manager()
+            for point_data in top_points:
+                x = point_data.get('x')
+                y = point_data.get('y')
+                color_data = point_data.get('color', {})
+                color = (color_data.get('r', 0), color_data.get('g', 255), color_data.get('b', 0))
+                size = point_data.get('size', 5)
+
+                if x is not None and y is not None:
+                    point_manager.add_point(x, y, color, size)
+
+            self.update_point_list()
+            self.show_status_message(f"已导入 {len(top_points)} 个上方点")
+
+        # ===== 4. 导入下方点 =====
+        bottom_points_by_image = json_data.get('bottom_points_by_image', {})
+        if bottom_points_by_image:
+            bottom_manager = self.controller.get_bottom_point_manager()
+
+            for img_index_str, points in bottom_points_by_image.items():
+                try:
+                    img_index = int(img_index_str) - 1  # JSON中是字符串，转回0-based索引
+
+                    # 设置当前图片索引
+                    bottom_manager.set_current_index(img_index)
+
+                    for point_data in points:
+                        x = point_data.get('x')
+                        y = point_data.get('y')
+                        color_data = point_data.get('color', {})
+                        color = (color_data.get('r', 0), color_data.get('g', 100), color_data.get('b', 255))
+                        size = point_data.get('size', 5)
+
+                        if x is not None and y is not None:
+                            bottom_manager.add_point(x, y, color, size)
+
+                except ValueError:
+                    print(f"无效的图片索引: {img_index_str}")
+
+            # 恢复当前图片索引
+            if self.controller.current_bottom_index is not None:
+                bottom_manager.set_current_index(self.controller.current_bottom_index)
+
+            self.update_bottom_point_list()
+            self.refresh_bottom_image()
+            total_bottom_points = sum(len(pts) for pts in bottom_points_by_image.values())
+            self.show_status_message(f"已导入 {total_bottom_points} 个下方点")
+
+        # ===== 5. 如果有坐标，刷新显示 =====
+        if self.controller.current_x is not None and self.controller.current_y is not None:
+            self.draw_crosshair(self.controller.current_x, self.controller.current_y)
+        else:
+            self.refresh_top_display()
+
+        # 更新导出按钮状态
+        self._update_export_button_state()
+
+        self.show_status_message("导入完成！")
