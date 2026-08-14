@@ -50,15 +50,17 @@ class ImageViewerApp(QWidget):
         # 初始化控制器
         self.controller = ImageController(self)
 
-        # 当前选中的点颜色（默认红色）
+        # 当前选中的点颜色
         self.point_color = (0, 255, 0)
-        # 下方点颜色（默认蓝色）
         self.bottom_point_color = (0, 100, 255)
 
-        # 导出按钮引用（将在setup_export_section中创建）
-        self.export_btn = None
-        self.export_info_label = None
-        self.clear_all_bottom_points_btn = None
+        # 图层列表相关
+        self.layer_list_widget = None
+        self.clear_layers_btn = None
+        self.remove_layer_btn = None
+        self.move_up_btn = None
+        self.move_down_btn = None
+        self.load_img_btn = None
 
         self.setup_ui()
         self.show_placeholders()
@@ -76,22 +78,6 @@ class ImageViewerApp(QWidget):
         left_layout.setContentsMargins(5, 5, 5, 5)
         left_layout.setSpacing(8)
         root_layout.addWidget(left_panel)
-
-        # 第一行：上方图片输入
-        row1_layout = QHBoxLayout()
-        left_layout.addLayout(row1_layout)
-
-        label1 = QLabel("上方图片路径:")
-        row1_layout.addWidget(label1)
-
-        self.url_entry_top = PathLineEdit(self.select_top_image)
-        self.url_entry_top.setPlaceholderText("双击选择上方图片路径")
-        row1_layout.addWidget(self.url_entry_top, 1)
-
-        load_btn1 = QPushButton("加载上方图片")
-        load_btn1.setStyleSheet("background: #4CAF50; color: white; padding: 4px 10px;")
-        load_btn1.clicked.connect(self.select_top_image)
-        row1_layout.addWidget(load_btn1)
 
         # 第二行：下方图片输入
         row2_layout = QHBoxLayout()
@@ -114,23 +100,6 @@ class ImageViewerApp(QWidget):
         self.info_label.setAlignment(Qt.AlignCenter)
         self.info_label.setStyleSheet("background: #F0F0F0; color: #666666;")
         left_layout.addWidget(self.info_label)
-
-        # 透明度控制
-        opacity_layout = QHBoxLayout()
-        left_layout.addLayout(opacity_layout)
-
-        opacity_label = QLabel("覆盖透明度:")
-        opacity_layout.addWidget(opacity_label)
-
-        self.opacity_slider = QSlider(Qt.Horizontal)
-        self.opacity_slider.setRange(0, 100)
-        self.opacity_slider.setValue(0)
-        self.opacity_slider.valueChanged.connect(self.on_opacity_changed)
-        opacity_layout.addWidget(self.opacity_slider)
-
-        self.opacity_value_label = QLabel("0%")
-        self.opacity_value_label.setFixedWidth(40)
-        opacity_layout.addWidget(self.opacity_value_label)
 
         # ---- 侧面图压缩控制 ----
         compress_layout = QHBoxLayout()
@@ -189,7 +158,6 @@ class ImageViewerApp(QWidget):
         self.setup_bottom_point_management(left_layout)
 
         # 绑定回车键
-        self.url_entry_top.returnPressed.connect(lambda: self.load_image("top_only"))
         self.url_entry_bottom.returnPressed.connect(lambda: self.load_image("both"))
 
         self.setup_export_section(left_layout)
@@ -200,8 +168,8 @@ class ImageViewerApp(QWidget):
         self.setup_image_display(root_layout)
 
     def setup_top_point_management(self, parent_layout):
-        """设置上方点管理区域"""
-        point_group = QGroupBox("📷 上方图片点管理")
+        """设置上方图片点管理区域 - 包含图层管理"""
+        point_group = QGroupBox("📷 上方图片管理")
         point_group.setStyleSheet("""
             QGroupBox {
                 font-weight: bold;
@@ -219,9 +187,72 @@ class ImageViewerApp(QWidget):
         """)
         point_layout = QVBoxLayout(point_group)
 
+        # ---- 加载图片按钮 ----
+        load_layout = QHBoxLayout()
+
+        load_img_btn = QPushButton("📁 加载上方图片")
+        load_img_btn.setStyleSheet("""
+            QPushButton {
+                background: #4CAF50;
+                color: white;
+                padding: 6px 12px;
+                border: none;
+                border-radius: 4px;
+                font-weight: bold;
+            }
+            QPushButton:hover {
+                background: #45a049;
+            }
+        """)
+        load_img_btn.clicked.connect(self.load_additional_top_image)
+        load_layout.addWidget(load_img_btn)
+
+        clear_layers_btn = QPushButton("🗑 清空叠加图层")
+        clear_layers_btn.setStyleSheet("""
+            QPushButton {
+                background: #ff6b6b;
+                color: white;
+                padding: 6px 12px;
+                border: none;
+                border-radius: 4px;
+                font-weight: bold;
+            }
+            QPushButton:hover {
+                background: #ff5252;
+            }
+        """)
+        clear_layers_btn.clicked.connect(self.clear_all_layers)
+        load_layout.addWidget(clear_layers_btn)
+
+        point_layout.addLayout(load_layout)
+
+        # ---- 图层列表 ----
+        layer_label = QLabel("图层列表 (从上到下):")
+        layer_label.setStyleSheet("font-weight: bold; color: #555555; margin-top: 5px;")
+        point_layout.addWidget(layer_label)
+
+        self.layer_list_widget = QListWidget()
+        self.layer_list_widget.setStyleSheet("""
+            QListWidget {
+                border: 1px solid #cccccc;
+                border-radius: 4px;
+                background: white;
+                min-height: 80px;
+                max-height: 120px;
+            }
+            QListWidget::item {
+                padding: 0px;
+                border-bottom: 1px solid #eeeeee;
+            }
+            QListWidget::item:selected {
+                background: #e3f2fd;
+            }
+        """)
+        self.layer_list_widget.setSpacing(1)
+        point_layout.addWidget(self.layer_list_widget)
+
         # ---- 点大小控制 ----
         size_layout = QHBoxLayout()
-
         size_label = QLabel("点大小:")
         size_layout.addWidget(size_label)
 
@@ -341,6 +372,10 @@ class ImageViewerApp(QWidget):
         point_layout.addWidget(self.point_count_label)
 
         parent_layout.addWidget(point_group)
+
+        # 保存按钮引用
+        self.load_img_btn = load_img_btn
+        self.clear_layers_btn = clear_layers_btn
 
     def setup_bottom_point_management(self, parent_layout):
         """设置下方点管理区域"""
@@ -1167,47 +1202,30 @@ class ImageViewerApp(QWidget):
         self.switch_bottom_image_by_y(self.controller.current_y)
 
     def draw_crosshair(self, x_coord, y_coord):
-        if self.controller.base_image is None and self.controller.top_image is None:
+        """绘制十字准星"""
+        # 使用图层管理器合成图像
+        composite = self.controller.render_top_image()
+
+        if composite is None:
             return
 
-        # 获取干净的图片（从原始图片重新绘制）
-        if self.controller.base_image is not None:
-            # 有底图，从底图开始
-            result_image = self.controller.base_image.copy()
-            if self.controller.top_image is not None:
-                # 应用透明度
-                alpha = self.controller.overlay_opacity / 100.0
-                if self.controller.top_image.size != self.controller.base_image.size:
-                    overlay_resized = self.controller.top_image.resize(
-                        self.controller.base_image.size, Image.Resampling.LANCZOS
-                    )
-                else:
-                    overlay_resized = self.controller.top_image
-                # 透明度越高，覆盖图越透明
-                overlay_weight = 1.0 - alpha
-                result_image = Image.blend(self.controller.base_image, overlay_resized, overlay_weight)
-        else:
-            # 只有覆盖图
-            result_image = self.controller.top_image.copy() if self.controller.top_image is not None else None
-
-        if result_image is None:
-            return
-
-        result_image = ImageUtils.adjust_contrast(result_image, self.controller.contrast_top)
-
-        draw = ImageDraw.Draw(result_image)
+        draw = ImageDraw.Draw(composite)
 
         # 绘制十字准星
         line_x = x_coord - 1
+        if line_x < 0:
+            line_x = 0
         draw.line([(line_x, 0), (line_x, self.top_size - 1)], fill=(0, 255, 0), width=2)
 
         line_y = y_coord - 1
+        if line_y < 0:
+            line_y = 0
         draw.line([(0, line_y), (self.top_size - 1, line_y)], fill=(255, 0, 0), width=2)
 
-        # 绘制已记录的点（使用当前选中的颜色）
+        # 绘制已记录的点
         self.draw_recorded_points(draw)
 
-        self.top_line_photo = self.set_label_image(self.top_image_label, result_image)
+        self.top_line_photo = self.set_label_image(self.top_image_label, composite)
         self.draw_bottom_line(x_coord)
 
     def draw_recorded_points(self, draw):
@@ -1216,15 +1234,11 @@ class ImageViewerApp(QWidget):
         if not points:
             return
 
-        for x, y, color, size in points:  # 解包出坐标、颜色、大小
-            # 获取图片尺寸
-            if self.controller.base_image is not None:
-                img_width, img_height = self.controller.base_image.size
-            elif self.controller.top_image is not None:
-                img_width, img_height = self.controller.top_image.size
-            else:
-                return
+        # 从图层管理器获取图片尺寸
+        img_width = self.top_size
+        img_height = self.top_size
 
+        for x, y, color, size in points:
             if 0 <= x < img_width and 0 <= y < img_height:
                 radius = size // 2
                 draw.ellipse(
@@ -1303,49 +1317,8 @@ class ImageViewerApp(QWidget):
             self.update_bottom_point_list()
 
     def update_top_display(self):
-        """更新上方图片显示（合并底座和覆盖图）"""
-        # 如果没有底座图片，只显示覆盖图或占位图
-        if self.controller.base_image is None:
-            if self.controller.top_image is not None:
-                # 调整对比度
-                result_image = self.controller.top_image.copy()
-                result_image = ImageUtils.adjust_contrast(result_image, self.controller.contrast_top)
-                self.top_photo = self.set_label_image(self.top_image_label, result_image)
-            else:
-                self.show_placeholders()
-            return
-
-        # 有底图，进行合成
-        result_image = self.controller.base_image.copy()
-
-        if self.controller.top_image is not None:
-            alpha = self.controller.overlay_opacity / 100.0
-
-            if self.controller.top_image.size != self.controller.base_image.size:
-                overlay_resized = self.controller.top_image.resize(
-                    self.controller.base_image.size, Image.Resampling.LANCZOS
-                )
-            else:
-                overlay_resized = self.controller.top_image
-
-            # 透明度越高，覆盖图越透明
-            overlay_weight = 1.0 - alpha
-            result_image = Image.blend(self.controller.base_image, overlay_resized, overlay_weight)
-
-        # 如果有坐标，绘制十字准星
-        if self.controller.current_x is not None and self.controller.current_y is not None:
-            draw = ImageDraw.Draw(result_image)
-            # 绘制十字准星
-            line_x = self.controller.current_x - 1
-            draw.line([(line_x, 0), (line_x, self.top_size - 1)], fill=(0, 255, 0), width=2)
-            line_y = self.controller.current_y - 1
-            draw.line([(0, line_y), (self.top_size - 1, line_y)], fill=(255, 0, 0), width=2)
-            # 绘制已记录的点
-            self.draw_recorded_points(draw)
-
-        result_image = ImageUtils.adjust_contrast(result_image, self.controller.contrast_top)
-        # 显示图片
-        self.top_photo = self.set_label_image(self.top_image_label, result_image)
+        """更新上方图片显示（使用图层管理器）"""
+        self.refresh_top_display()
 
     def update_bottom_display(self):
         """更新下方图片的显示"""
@@ -1356,18 +1329,6 @@ class ImageViewerApp(QWidget):
         self.bottom_display_photo = self.set_label_image(self.bottom_image_label, display_image)
 
     # ========== 文件加载方法 ==========
-
-    def select_top_image(self):
-        image_path, _ = QFileDialog.getOpenFileName(
-            self,
-            "选择上方图片",
-            self.url_entry_top.text().strip() or "",
-            "图片文件 (*.png *.jpg *.jpeg *.bmp *.tif *.tiff);;所有文件 (*)",
-        )
-        if image_path:
-            self.url_entry_top.setText(image_path)
-            self.load_image("top_only")
-
     def select_data_folder(self):
         base_path = QFileDialog.getExistingDirectory(
             self,
@@ -1389,7 +1350,7 @@ class ImageViewerApp(QWidget):
                 return
 
             if self.controller.load_top_image(image_path):
-                # 应用当前对比度设置
+                self.update_layer_list()
                 contrast_value = self.contrast_top_slider.value() / 100.0
                 self.controller.set_contrast_top(contrast_value)
                 self.update_top_display()
@@ -1406,7 +1367,6 @@ class ImageViewerApp(QWidget):
                 return
 
             if self.controller.load_data_folder(base_path):
-                # 应用当前对比度设置
                 contrast_top = self.contrast_top_slider.value() / 100.0
                 contrast_bottom = self.contrast_bottom_slider.value() / 100.0
                 self.controller.set_contrast_top(contrast_top)
@@ -1414,6 +1374,8 @@ class ImageViewerApp(QWidget):
 
                 compress_value = self.compress_slider.value() / 100.0
                 self.controller.set_compress_ratio(compress_value)
+
+                self.update_layer_list()
                 self.update_top_display()
 
                 if self.controller.current_y is not None:
@@ -1441,7 +1403,7 @@ class ImageViewerApp(QWidget):
         # 传入颜色和大小
         if self.controller.get_point_manager().add_point(x, y, self.point_color, current_size):
             self.update_point_list()
-            self.refresh_top_image()
+            self.refresh_top_display()  # 使用新的刷新方法
             self.show_status_message(f"已记录点 ({x}, {y}) 颜色: RGB{self.point_color} 大小: {current_size}px")
         else:
             self.show_warning("提示", f"点 ({x}, {y}) 已存在")
@@ -1553,7 +1515,8 @@ class ImageViewerApp(QWidget):
 
     def _update_top_coordinate(self, x, y):
         """更新上方图片坐标（供点击和拖动调用）"""
-        if self.controller.top_image is None and self.controller.base_image is None:
+        # 检查是否有任何图层或底座
+        if self.controller.layer_manager.get_layer_count() == 0 and self.controller.layer_manager.base_image is None:
             return
 
         # 获取label的实际尺寸
@@ -1570,25 +1533,26 @@ class ImageViewerApp(QWidget):
         if label_width <= 0 or label_height <= 0 or pixmap_width <= 0 or pixmap_height <= 0:
             return
 
+        # 计算显示比例
         ratio = min(label_width / pixmap_width, label_height / pixmap_height)
         display_width = int(pixmap_width * ratio)
         display_height = int(pixmap_height * ratio)
 
-        offset_x = self.controller.top_offset_x
-        offset_y = self.controller.top_offset_y
+        # 计算偏移量
+        offset_x = (label_width - display_width) // 2
+        offset_y = (label_height - display_height) // 2
 
+        # 转换为图片坐标
         img_x = x - offset_x
         img_y = y - offset_y
 
         if img_x < 0 or img_x >= display_width or img_y < 0 or img_y >= display_height:
             return
 
-        if self.controller.base_image is not None:
-            orig_width, orig_height = self.controller.base_image.size
-        elif self.controller.top_image is not None:
-            orig_width, orig_height = self.controller.top_image.size
-        else:
-            return
+        # 获取原始图片尺寸（使用合成图像的尺寸）
+        # 从图层管理器获取第一个图层或底座的尺寸
+        orig_width = self.top_size
+        orig_height = self.top_size
 
         original_x = int((img_x / display_width) * orig_width)
         original_y = int((img_y / display_height) * orig_height)
@@ -1596,9 +1560,11 @@ class ImageViewerApp(QWidget):
         original_x = max(1, min(orig_width, original_x))
         original_y = max(1, min(orig_height, original_y))
 
+        # 更新坐标
         self.controller.set_coordinate(original_x, original_y)
 
-        self.draw_crosshair(original_x, original_y)
+        # 刷新显示 - 使用新的合成方法
+        self.refresh_top_display()
         self.switch_bottom_image_by_y(original_y)
 
         self.record_point_btn.setEnabled(True)
@@ -1651,3 +1617,164 @@ class ImageViewerApp(QWidget):
 
         self.record_point_btn.setEnabled(True)
         self.record_bottom_point_btn.setEnabled(True)
+
+    def load_additional_top_image(self):
+        """加载额外的上方图片（作为新图层）"""
+        image_path, _ = QFileDialog.getOpenFileName(
+            self,
+            "选择要叠加的图片",
+            "",
+            "图片文件 (*.png *.jpg *.jpeg *.bmp *.tif *.tiff);;所有文件 (*)",
+        )
+        if image_path:
+            if self.controller.load_top_image(image_path):
+                self.update_layer_list()
+                # 如果有坐标，重新绘制
+                if self.controller.current_x is not None and self.controller.current_y is not None:
+                    self.draw_crosshair(self.controller.current_x, self.controller.current_y)
+                else:
+                    self.refresh_top_display()
+                self.show_status_message(f"已加载图层: {os.path.basename(image_path)}")
+
+    def update_layer_list(self):
+        """更新图层列表显示（只显示叠加图层，不包含底图）"""
+        self.layer_list_widget.clear()
+
+        # 只获取叠加图层，不包含底图
+        layers = self.controller.layer_manager.get_layers()
+
+        if not layers:
+            # 没有叠加图层时显示提示
+            item = QListWidgetItem(self.layer_list_widget)
+            label = QLabel("暂无叠加图层")
+            label.setStyleSheet("color: #999999; padding: 10px; text-align: center;")
+            label.setAlignment(Qt.AlignCenter)
+            item.setSizeHint(label.sizeHint())
+            self.layer_list_widget.addItem(item)
+            self.layer_list_widget.setItemWidget(item, label)
+            self.clear_layers_btn.setEnabled(False)
+            return
+
+        # 从上层到下层显示（反转顺序）
+        # 显示列表索引: 0 对应 实际列表最后一个（最上层）
+        # 显示列表索引: layer_count-1 对应 实际列表第一个（最下层）
+        for display_idx in range(len(layers) - 1, -1, -1):
+            actual_idx = display_idx  # 实际索引就是循环变量
+            layer = layers[actual_idx]
+
+            item = QListWidgetItem(self.layer_list_widget)
+
+            # 创建自定义widget
+            widget = QWidget()
+            layout = QHBoxLayout(widget)
+            layout.setContentsMargins(5, 2, 5, 2)
+            layout.setSpacing(5)
+
+            # 图层名称
+            name_label = QLabel(f"{layer.name}")
+            name_label.setStyleSheet("font-weight: 500;")
+            layout.addWidget(name_label, 1)
+
+            # 透明度滑块
+            opacity_slider = QSlider(Qt.Horizontal)
+            opacity_slider.setRange(0, 100)
+            opacity_slider.setValue(layer.opacity)
+            opacity_slider.setFixedWidth(80)
+            # 使用display_idx作为参数传递
+            opacity_slider.valueChanged.connect(
+                lambda value, idx=display_idx: self.on_layer_opacity_changed(idx, value)
+            )
+            layout.addWidget(opacity_slider)
+
+            # 透明度数值
+            opacity_label = QLabel(f"{layer.opacity}%")
+            opacity_label.setFixedWidth(35)
+            opacity_label.setStyleSheet("font-size: 10px;")
+            layout.addWidget(opacity_label)
+
+            # 存储控件引用以便更新
+            widget.opacity_slider = opacity_slider
+            widget.opacity_label = opacity_label
+
+            item.setSizeHint(widget.sizeHint())
+            self.layer_list_widget.addItem(item)
+            self.layer_list_widget.setItemWidget(item, widget)
+
+        # 更新按钮状态
+        has_layers = len(layers) > 0
+        self.clear_layers_btn.setEnabled(has_layers)
+
+    def on_layer_opacity_changed(self, display_index: int, value: int):
+        """图层透明度变化"""
+        try:
+            # 获取实际图层数量（只包含叠加图层，不包含底图）
+            layer_count = self.controller.layer_manager.get_layer_count()
+            if layer_count == 0:
+                return
+
+            # 显示列表是反转的，所以：
+            # display_index 0 对应实际索引 layer_count - 1
+            # display_index layer_count - 1 对应实际索引 0
+            actual_index = layer_count - 1 - display_index
+
+            # 确保索引有效
+            if actual_index < 0 or actual_index >= layer_count:
+                return
+
+            # 设置透明度（actual_index是叠加图层的索引，从0开始）
+            if self.controller.layer_manager.set_layer_opacity(display_index, value):
+                # 更新显示
+                self.refresh_top_display()
+
+                # 更新透明度标签
+                item = self.layer_list_widget.item(actual_index)
+                if item:
+                    widget = self.layer_list_widget.itemWidget(item)
+                    if widget and hasattr(widget, 'opacity_label'):
+                        widget.opacity_label.setText(f"{value}%")
+        except Exception as e:
+            print(f"透明度调整错误: {e}")
+
+    def clear_all_layers(self):
+        """清空所有图层（保留底座图片）"""
+        if self.controller.layer_manager.get_layer_count() == 0:
+            self.show_warning("提示", "没有可清空的图层")
+            return
+
+        reply = QMessageBox.question(
+            self,
+            "确认清空",
+            "确定要清空所有叠加的图层吗？（底座图片将被保留）",
+            QMessageBox.Yes | QMessageBox.No,
+            QMessageBox.No
+        )
+
+        if reply == QMessageBox.Yes:
+            # 只清空图层，保留底座
+            self.controller.layer_manager.layers.clear()
+            self.update_layer_list()
+            self.refresh_top_display()
+            self.show_status_message("已清空所有叠加图层")
+
+    def refresh_top_display(self):
+        """刷新上方图片显示（使用图层管理器合成）"""
+        # 获取合成图像
+        composite = self.controller.render_top_image()
+
+        # 如果有坐标，绘制十字准星
+        if self.controller.current_x is not None and self.controller.current_y is not None:
+            draw = ImageDraw.Draw(composite)
+            # 绘制十字准星
+            line_x = self.controller.current_x - 1
+            if line_x < 0:
+                line_x = 0
+            line_y = self.controller.current_y - 1
+            if line_y < 0:
+                line_y = 0
+            draw.line([(line_x, 0), (line_x, self.top_size - 1)], fill=(0, 255, 0), width=2)
+            draw.line([(0, line_y), (self.top_size - 1, line_y)], fill=(255, 0, 0), width=2)
+            # 绘制已记录的点
+            self.draw_recorded_points(draw)
+
+        # 显示图片
+        self.top_photo = self.set_label_image(self.top_image_label, composite)
