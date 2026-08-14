@@ -729,7 +729,40 @@ class ImageViewerApp(QWidget):
         lines.append(f"导出时间: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
         lines.append("")
 
-        # 统计信息
+        # ===== 路径信息 =====
+        lines.append("-" * 60)
+        lines.append("数据路径信息")
+        lines.append("-" * 60)
+
+        # 数据文件夹路径
+        data_folder = self.url_entry_bottom.text().strip()
+        if data_folder:
+            lines.append(f"数据文件夹: {data_folder}")
+            bscan_path = os.path.join(data_folder, "B-scan_PixelRatio")
+            if os.path.exists(bscan_path):
+                lines.append(f"B-scan路径: {bscan_path}")
+            angio_path = os.path.join(data_folder, "Angio")
+            if os.path.exists(angio_path):
+                lines.append(f"Angio路径: {angio_path}")
+        else:
+            lines.append("数据文件夹: 未加载")
+
+        # 覆盖图片路径（导出完整路径）
+        layers = self.controller.layer_manager.get_layers()
+        if layers:
+            lines.append(f"覆盖图片数量: {len(layers)}")
+            for i, layer in enumerate(layers, 1):
+                # 显示完整路径
+                if layer.path:
+                    lines.append(f"  覆盖图片 {i}: {layer.path}")
+                else:
+                    lines.append(f"  覆盖图片 {i}: {layer.name} (路径未知)")
+        else:
+            lines.append("覆盖图片: 无")
+
+        lines.append("")
+
+        # ===== 统计信息 =====
         lines.append("-" * 60)
         lines.append("统计信息")
         lines.append("-" * 60)
@@ -740,7 +773,7 @@ class ImageViewerApp(QWidget):
         lines.append(f"有标注的图片数: {len(bottom_points)}")
         lines.append("")
 
-        # 上方点数据
+        # ===== 上方点数据 =====
         lines.append("-" * 60)
         lines.append("上方图片点数据 (坐标: 像素)")
         lines.append("-" * 60)
@@ -754,7 +787,7 @@ class ImageViewerApp(QWidget):
             lines.append("(无数据)")
         lines.append("")
 
-        # 下方点数据（按图片索引分组）
+        # ===== 下方点数据（按图片索引分组） =====
         lines.append("-" * 60)
         lines.append("下方图片点数据 (按图片索引分组)")
         lines.append("-" * 60)
@@ -791,11 +824,39 @@ class ImageViewerApp(QWidget):
 
         total_bottom_points = sum(len(pts) for pts in bottom_points.values())
 
+        # 获取数据路径信息
+        data_folder = self.url_entry_bottom.text().strip()
+        bscan_path = ""
+        angio_path = ""
+        if data_folder:
+            bscan_path = os.path.join(data_folder, "B-scan_PixelRatio")
+            if not os.path.exists(bscan_path):
+                bscan_path = ""
+            angio_path = os.path.join(data_folder, "Angio")
+            if not os.path.exists(angio_path):
+                angio_path = ""
+
+        # 获取覆盖图片路径列表（导出完整路径）
+        layers = self.controller.layer_manager.get_layers()
+        overlay_images = []
+        for layer in layers:
+            if layer.path:
+                overlay_images.append(layer.path)
+            else:
+                overlay_images.append(layer.name)  # fallback
+
         json_data = {
             "export_info": {
                 "format": "json",
                 "export_time": datetime.now().isoformat(),
                 "version": "1.0"
+            },
+            "paths": {
+                "data_folder": data_folder if data_folder else "",
+                "bscan_path": bscan_path,
+                "angio_path": angio_path,
+                "overlay_images": overlay_images,  # 完整路径列表
+                "overlay_count": len(overlay_images)
             },
             "statistics": {
                 "top_count": len(top_points),
@@ -1731,14 +1792,12 @@ class ImageViewerApp(QWidget):
         """更新图层列表显示（只显示叠加图层，不包含底图）"""
         self.layer_list_widget.clear()
 
-        # 只获取叠加图层，不包含底图
         layers = self.controller.layer_manager.get_layers()
 
         if not layers:
-            # 没有叠加图层时显示提示
             item = QListWidgetItem(self.layer_list_widget)
             label = QLabel("暂无叠加图层")
-            label.setStyleSheet("color: #999999; padding: 10px; text-align: center;")
+            label.setStyleSheet("color: #999999; padding: 5px; text-align: center; font-size: 11px;")
             label.setAlignment(Qt.AlignCenter)
             item.setSizeHint(label.sizeHint())
             self.layer_list_widget.addItem(item)
@@ -1746,24 +1805,22 @@ class ImageViewerApp(QWidget):
             self.clear_layers_btn.setEnabled(False)
             return
 
-        # 从上层到下层显示（反转顺序）
-        # 显示列表索引: 0 对应 实际列表最后一个（最上层）
-        # 显示列表索引: layer_count-1 对应 实际列表第一个（最下层）
         for display_idx in range(len(layers) - 1, -1, -1):
-            actual_idx = display_idx  # 实际索引就是循环变量
+            actual_idx = display_idx
             layer = layers[actual_idx]
 
             item = QListWidgetItem(self.layer_list_widget)
 
-            # 创建自定义widget
             widget = QWidget()
             layout = QHBoxLayout(widget)
             layout.setContentsMargins(5, 2, 5, 2)
             layout.setSpacing(5)
 
-            # 图层名称
+            # 图层名称（显示文件名，完整路径作为tooltip）
             name_label = QLabel(f"{layer.name}")
-            name_label.setStyleSheet("font-weight: 500;")
+            name_label.setStyleSheet("font-weight: 500; font-size: 11px;")
+            if layer.path:
+                name_label.setToolTip(f"完整路径: {layer.path}")  # 鼠标悬停显示完整路径
             layout.addWidget(name_label, 1)
 
             # 透明度滑块
@@ -1783,7 +1840,7 @@ class ImageViewerApp(QWidget):
             opacity_label.setStyleSheet("font-size: 10px;")
             layout.addWidget(opacity_label)
 
-            # 存储控件引用以便更新
+            # 存储控件引用
             widget.opacity_slider = opacity_slider
             widget.opacity_label = opacity_label
 

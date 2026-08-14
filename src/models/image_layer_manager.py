@@ -8,7 +8,8 @@ class ImageLayer:
     """图片层数据类"""
     image: Image.Image
     opacity: int  # 0-100
-    name: str  # 文件路径或自定义名称
+    name: str  # 显示名称（文件名）
+    path: str = ""  # 完整路径
     visible: bool = True
 
     def get_blend_weight(self) -> float:
@@ -20,14 +21,9 @@ class ImageLayerManager:
     """图片层管理器 - 支持多层图片叠加"""
 
     def __init__(self, base_size: Tuple[int, int]):
-        """
-        初始化图层管理器
-        Args:
-            base_size: 基础尺寸 (width, height)
-        """
         self.base_size = base_size
         self.layers: List[ImageLayer] = []
-        self.base_image: Optional[Image.Image] = None  # 底座图片（可选）
+        self.base_image: Optional[Image.Image] = None
 
     def set_base_image(self, image: Image.Image):
         """设置底座图片"""
@@ -36,13 +32,22 @@ class ImageLayerManager:
         else:
             self.base_image = image.copy()
 
-    def add_layer(self, image: Image.Image, opacity: int = 100, name: str = "") -> int:
+    def add_layer(self, image: Image.Image, opacity: int = 100, name: str = "", path: str = "") -> int:
         """
         添加新图层（添加到最上面）
+        Args:
+            image: PIL图片对象
+            opacity: 透明度 0-100
+            name: 显示名称（通常是文件名）
+            path: 完整文件路径
         Returns:
             图层索引
         """
-        # 调整图片尺寸
+        # 确保图片是 RGB 模式
+        if image.mode != 'RGB':
+            image = image.convert('RGB')
+
+        # 确保图片尺寸与base_size一致
         if image.size != self.base_size:
             resized_image = image.resize(self.base_size, Image.Resampling.LANCZOS)
         else:
@@ -52,7 +57,7 @@ class ImageLayerManager:
         if not name:
             name = f"图层 {len(self.layers) + 1}"
 
-        layer = ImageLayer(resized_image, opacity, name)
+        layer = ImageLayer(resized_image, opacity, name, path)
         self.layers.append(layer)
         return len(self.layers) - 1
 

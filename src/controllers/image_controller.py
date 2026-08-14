@@ -56,18 +56,23 @@ class ImageController:
         """加载上方图片（作为新图层添加到最上面）"""
         try:
             original_image = Image.open(image_path)
+
+            # 获取文件名（用于显示）和完整路径（用于导出）
+            file_name = os.path.basename(image_path)
+            full_path = os.path.abspath(image_path)
+
             # 添加到图层管理器
             layer_index = self.layer_manager.add_layer(
                 original_image,
-                opacity=100,  # 默认完全不透明
-                name=os.path.basename(image_path)
+                opacity=100,
+                name=file_name,  # 显示文件名
+                path=full_path  # 存储完整路径
             )
 
-            # 更新显示信息（使用第一个图层的信息）
+            # 更新显示信息
             if self.layer_manager.get_layer_count() > 0:
                 first_layer = self.layer_manager.get_layer(0)
                 if first_layer:
-                    # 计算显示信息
                     resized_image, display_info = ImageUtils.resize_and_center_with_info(
                         first_layer.image, (self.app.top_size, self.app.top_size)
                     )
