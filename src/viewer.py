@@ -62,6 +62,11 @@ class ImageViewerApp(QWidget):
         self.move_down_btn = None
         self.load_img_btn = None
 
+        # 导出按钮引用
+        self.export_log_btn = None
+        self.export_json_btn = None
+        self.export_info_label = None
+
         self.setup_ui()
         self.show_placeholders()
 
@@ -565,18 +570,22 @@ class ImageViewerApp(QWidget):
             }
         """)
         export_layout = QVBoxLayout(export_group)
+        export_layout.setSpacing(5)
 
-        # 导出按钮
-        export_btn = QPushButton("📤 一键导出所有数据")
-        export_btn.setStyleSheet("""
+        # ---- 导出按钮行（并排） ----
+        button_row = QHBoxLayout()
+        button_row.setSpacing(5)
+
+        # 导出Log格式按钮
+        self.export_log_btn = QPushButton("📄 导出Log")
+        self.export_log_btn.setStyleSheet("""
             QPushButton {
                 background: #FF9800;
                 color: white;
-                padding: 10px 20px;
+                padding: 6px 12px;
                 border: none;
-                border-radius: 6px;
+                border-radius: 4px;
                 font-weight: bold;
-                font-size: 14px;
             }
             QPushButton:hover {
                 background: #F57C00;
@@ -589,72 +598,133 @@ class ImageViewerApp(QWidget):
                 color: #666666;
             }
         """)
-        export_btn.clicked.connect(self.export_all_data)
-        export_btn.setEnabled(False)
-        export_layout.addWidget(export_btn)
+        self.export_log_btn.clicked.connect(self.export_log_format)
+        self.export_log_btn.setEnabled(False)
+        button_row.addWidget(self.export_log_btn)
+
+        # 导出JSON格式按钮
+        self.export_json_btn = QPushButton("📊 导出JSON")
+        self.export_json_btn.setStyleSheet("""
+            QPushButton {
+                background: #2196F3;
+                color: white;
+                padding: 6px 12px;
+                border: none;
+                border-radius: 4px;
+                font-weight: bold;
+            }
+            QPushButton:hover {
+                background: #1976D2;
+            }
+            QPushButton:pressed {
+                background: #0D47A1;
+            }
+            QPushButton:disabled {
+                background: #cccccc;
+                color: #666666;
+            }
+        """)
+        self.export_json_btn.clicked.connect(self.export_json_format)
+        self.export_json_btn.setEnabled(False)
+        button_row.addWidget(self.export_json_btn)
+
+        export_layout.addLayout(button_row)
 
         # 导出信息标签
         self.export_info_label = QLabel("导出: 等待数据...")
-        self.export_info_label.setStyleSheet("color: #666666; font-size: 11px; padding: 5px;")
+        self.export_info_label.setStyleSheet("color: #666666; font-size: 11px; padding: 3px;")
         self.export_info_label.setAlignment(Qt.AlignCenter)
         export_layout.addWidget(self.export_info_label)
 
         parent_layout.addWidget(export_group)
 
-        # 保存导出按钮引用以便后续启用/禁用
-        self.export_btn = export_btn
-
-    def export_all_data(self):
-        """导出所有数据到 output.txt"""
+    def export_log_format(self):
+        """导出Log格式（人类可读的文本格式）"""
         try:
-            # 获取数据
             top_points = self.controller.get_point_manager().get_points()
-            bottom_points = self.controller.get_bottom_point_manager().get_points()
+            bottom_points = self.controller.get_bottom_point_manager().get_points_with_index()
+            all_bottom_points_flat = []
+            for pts in bottom_points.values():
+                all_bottom_points_flat.extend(pts)
 
-            # 检查是否有数据
-            if not top_points and not bottom_points:
+            if not top_points and not all_bottom_points_flat:
                 self.show_warning("提示", "没有可导出的数据！请先记录至少一个点。")
                 return
 
-            # 选择保存路径
             from PySide6.QtWidgets import QFileDialog
             file_path, _ = QFileDialog.getSaveFileName(
                 self,
-                "保存导出数据",
-                "output.txt",
-                "文本文件 (*.txt);;所有文件 (*)"
+                "保存Log格式数据",
+                "output.log",
+                "日志文件 (*.log);;文本文件 (*.txt);;所有文件 (*)"
             )
 
             if not file_path:
-                return  # 用户取消
+                return
 
-            # 生成导出内容
-            export_content = self._generate_export_content(top_points, bottom_points)
+            export_content = self._generate_log_content(top_points, bottom_points)
 
-            # 写入文件
             with open(file_path, 'w', encoding='utf-8') as f:
                 f.write(export_content)
 
-            # 更新状态
-            self.export_info_label.setText(f"✅ 导出成功: {os.path.basename(file_path)}")
-            self.export_info_label.setStyleSheet("color: #2E7D32; font-size: 11px; padding: 5px;")
-
-            self.show_status_message(f"数据已导出到 {file_path}")
+            self.export_info_label.setText(f"✅ Log导出成功: {os.path.basename(file_path)}")
+            self.export_info_label.setStyleSheet("color: #2E7D32; font-size: 11px; padding: 3px;")
+            self.show_status_message(f"Log数据已导出到 {file_path}")
 
         except Exception as e:
-            self.show_error("导出失败", f"导出数据时发生错误：\n{str(e)}")
+            self.show_error("导出失败", f"导出Log格式时发生错误：\n{str(e)}")
             self.export_info_label.setText("❌ 导出失败")
-            self.export_info_label.setStyleSheet("color: #C62828; font-size: 11px; padding: 5px;")
+            self.export_info_label.setStyleSheet("color: #C62828; font-size: 11px; padding: 3px;")
 
-    def _generate_export_content(self, top_points, bottom_points) -> str:
-        """生成导出内容"""
-        import json
+    def export_json_format(self):
+        """导出JSON格式（机器可读的JSON格式）"""
+        try:
+            import json
+            from datetime import datetime
+
+            top_points = self.controller.get_point_manager().get_points()
+            bottom_points = self.controller.get_bottom_point_manager().get_points_with_index()
+            all_bottom_points_flat = []
+            for pts in bottom_points.values():
+                all_bottom_points_flat.extend(pts)
+
+            if not top_points and not all_bottom_points_flat:
+                self.show_warning("提示", "没有可导出的数据！请先记录至少一个点。")
+                return
+
+            from PySide6.QtWidgets import QFileDialog
+            file_path, _ = QFileDialog.getSaveFileName(
+                self,
+                "保存JSON格式数据",
+                "output.json",
+                "JSON文件 (*.json);;所有文件 (*)"
+            )
+
+            if not file_path:
+                return
+
+            json_data = self._generate_json_content(top_points, bottom_points)
+
+            with open(file_path, 'w', encoding='utf-8') as f:
+                json.dump(json_data, f, indent=2, ensure_ascii=False)
+
+            self.export_info_label.setText(f"✅ JSON导出成功: {os.path.basename(file_path)}")
+            self.export_info_label.setStyleSheet("color: #2E7D32; font-size: 11px; padding: 3px;")
+            self.show_status_message(f"JSON数据已导出到 {file_path}")
+
+        except Exception as e:
+            self.show_error("导出失败", f"导出JSON格式时发生错误：\n{str(e)}")
+            self.export_info_label.setText("❌ 导出失败")
+            self.export_info_label.setStyleSheet("color: #C62828; font-size: 11px; padding: 3px;")
+
+    def _generate_log_content(self, top_points, bottom_points) -> str:
+        """生成Log格式内容（人类可读）"""
         from datetime import datetime
 
         lines = []
 
         lines.append("=" * 60)
-        lines.append("断层扫描点标注数据导出")
+        lines.append("断层扫描点标注数据导出 (Log格式)")
         lines.append("=" * 60)
         lines.append(f"导出时间: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
         lines.append("")
@@ -663,10 +733,11 @@ class ImageViewerApp(QWidget):
         lines.append("-" * 60)
         lines.append("统计信息")
         lines.append("-" * 60)
+        total_bottom_points = sum(len(pts) for pts in bottom_points.values())
         lines.append(f"上方图片点数: {len(top_points)}")
-        total_bottom_points = self.controller.get_bottom_point_manager().get_total_point_count()
         lines.append(f"下方图片总点数: {total_bottom_points}")
         lines.append(f"总计点数: {len(top_points) + total_bottom_points}")
+        lines.append(f"有标注的图片数: {len(bottom_points)}")
         lines.append("")
 
         # 上方点数据
@@ -688,58 +759,74 @@ class ImageViewerApp(QWidget):
         lines.append("下方图片点数据 (按图片索引分组)")
         lines.append("-" * 60)
 
-        all_bottom_points = self.controller.get_bottom_point_manager().get_points_with_index()
-        if all_bottom_points:
+        if bottom_points:
             total_images = len(self.controller.bottom_image_paths)
             lines.append(f"总图片数: {total_images}")
-            lines.append(f"有点的图片数: {len(all_bottom_points)}")
+            lines.append(f"有点的图片数: {len(bottom_points)}")
             lines.append("")
 
-            for img_idx in sorted(all_bottom_points.keys()):
-                points = all_bottom_points[img_idx]
+            for img_idx in sorted(bottom_points.keys()):
+                points = bottom_points[img_idx]
                 lines.append(f"图片 {img_idx + 1}:")
                 lines.append(f"  点数: {len(points)}")
-                lines.append(f"  {'序号':<6} {'X坐标':<10} {'Y坐标':<10} {'颜色(R,G,B)':<20} {'大小(px)':<10}")
-                for i, (x, y, color, size) in enumerate(points, 1):
-                    color_str = f"({color[0]},{color[1]},{color[2]})"
-                    lines.append(f"  {i:<6} {x:<10} {y:<10} {color_str:<20} {size:<10}")
+                if points:
+                    lines.append(f"  {'序号':<6} {'X坐标':<10} {'Y坐标':<10} {'颜色(R,G,B)':<20} {'大小(px)':<10}")
+                    for i, (x, y, color, size) in enumerate(points, 1):
+                        color_str = f"({color[0]},{color[1]},{color[2]})"
+                        lines.append(f"  {i:<6} {x:<10} {y:<10} {color_str:<20} {size:<10}")
                 lines.append("")
         else:
             lines.append("(无数据)")
         lines.append("")
 
-        # JSON格式数据
-        lines.append("-" * 60)
-        lines.append("JSON格式数据")
-        lines.append("-" * 60)
-
-        json_data = {
-            "export_time": datetime.now().isoformat(),
-            "top_points": [
-                {"x": x, "y": y, "color": {"r": c[0], "g": c[1], "b": c[2]}, "size": s}
-                for x, y, c, s in top_points
-            ],
-            "bottom_points_by_image": {
-                str(idx + 1): [
-                    {"x": x, "y": y, "color": {"r": c[0], "g": c[1], "b": c[2]}, "size": s}
-                    for x, y, c, s in points
-                ]
-                for idx, points in all_bottom_points.items()
-            },
-            "statistics": {
-                "total": len(top_points) + total_bottom_points,
-                "top_count": len(top_points),
-                "bottom_count": total_bottom_points,
-                "images_with_points": len(all_bottom_points)
-            }
-        }
-        lines.append(json.dumps(json_data, indent=2, ensure_ascii=False))
-        lines.append("")
         lines.append("=" * 60)
         lines.append("导出完成")
         lines.append("=" * 60)
 
         return "\n".join(lines)
+
+    def _generate_json_content(self, top_points, bottom_points) -> dict:
+        """生成JSON格式内容（机器可读）"""
+        from datetime import datetime
+
+        total_bottom_points = sum(len(pts) for pts in bottom_points.values())
+
+        json_data = {
+            "export_info": {
+                "format": "json",
+                "export_time": datetime.now().isoformat(),
+                "version": "1.0"
+            },
+            "statistics": {
+                "top_count": len(top_points),
+                "bottom_count": total_bottom_points,
+                "total": len(top_points) + total_bottom_points,
+                "images_with_points": len(bottom_points)
+            },
+            "top_points": [
+                {
+                    "x": x,
+                    "y": y,
+                    "color": {"r": c[0], "g": c[1], "b": c[2]},
+                    "size": s
+                }
+                for x, y, c, s in top_points
+            ],
+            "bottom_points_by_image": {
+                str(idx + 1): [
+                    {
+                        "x": x,
+                        "y": y,
+                        "color": {"r": c[0], "g": c[1], "b": c[2]},
+                        "size": s
+                    }
+                    for x, y, c, s in points
+                ]
+                for idx, points in bottom_points.items()
+            }
+        }
+
+        return json_data
 
     # ========== 下方点颜色选择 ==========
 
@@ -978,7 +1065,10 @@ class ImageViewerApp(QWidget):
 
     def _update_export_button_state(self):
         """更新导出按钮状态"""
-        if not hasattr(self, 'export_btn') or self.export_btn is None:
+        # 确保导出按钮已初始化
+        if not hasattr(self, 'export_log_btn') or self.export_log_btn is None:
+            return
+        if not hasattr(self, 'export_json_btn') or self.export_json_btn is None:
             return
 
         top_count = self.controller.get_point_manager().get_point_count()
@@ -986,14 +1076,15 @@ class ImageViewerApp(QWidget):
         has_data = top_count > 0 or bottom_count > 0
 
         try:
-            self.export_btn.setEnabled(has_data)
+            self.export_log_btn.setEnabled(has_data)
+            self.export_json_btn.setEnabled(has_data)
 
             if has_data and hasattr(self, 'export_info_label') and self.export_info_label:
                 self.export_info_label.setText(f"📊 可导出: 上方 {top_count} 个, 下方 {bottom_count} 个")
-                self.export_info_label.setStyleSheet("color: #2E7D32; font-size: 11px; padding: 5px;")
+                self.export_info_label.setStyleSheet("color: #2E7D32; font-size: 11px; padding: 3px;")
             elif hasattr(self, 'export_info_label') and self.export_info_label:
                 self.export_info_label.setText("导出: 等待数据...")
-                self.export_info_label.setStyleSheet("color: #666666; font-size: 11px; padding: 5px;")
+                self.export_info_label.setStyleSheet("color: #666666; font-size: 11px; padding: 3px;")
         except Exception as e:
             print(f"更新导出按钮状态时出错: {e}")
 
