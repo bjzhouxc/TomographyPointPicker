@@ -31,7 +31,7 @@ class ImageViewerApp(QWidget):
     def __init__(self):
         super().__init__()
         self.setWindowTitle("Tomography Point Picker")
-        self.resize(1025, 1000)
+        self.resize(1475, 1000)
 
         # 定义尺寸常量
         self.top_size = 512
@@ -108,68 +108,26 @@ class ImageViewerApp(QWidget):
         self.info_label.setStyleSheet("background: #F0F0F0; color: #666666;")
         left_layout.addWidget(self.info_label)
 
-        # ---- 侧面图压缩控制 ----
-        compress_layout = QHBoxLayout()
-        left_layout.addLayout(compress_layout)
-
-        compress_label = QLabel("侧面图压缩:")
-        compress_layout.addWidget(compress_label)
-
-        self.compress_slider = QSlider(Qt.Horizontal)
-        self.compress_slider.setRange(1, 100)
-        self.compress_slider.setValue(100)
-        self.compress_slider.valueChanged.connect(self.on_compress_changed)
-        compress_layout.addWidget(self.compress_slider)
-
-        self.compress_value_label = QLabel("100%")
-        self.compress_value_label.setFixedWidth(40)
-        compress_layout.addWidget(self.compress_value_label)
-
-        # ---- 对比度控制 ----
-        contrast_top_layout = QHBoxLayout()
-        left_layout.addLayout(contrast_top_layout)
-
-        contrast_top_label = QLabel("上方对比度:")
-        contrast_top_layout.addWidget(contrast_top_label)
-
-        self.contrast_top_slider = QSlider(Qt.Horizontal)
-        self.contrast_top_slider.setRange(0, 200)
-        self.contrast_top_slider.setValue(100)
-        self.contrast_top_slider.valueChanged.connect(self.on_contrast_top_changed)
-        contrast_top_layout.addWidget(self.contrast_top_slider)
-
-        self.contrast_top_value_label = QLabel("100%")
-        self.contrast_top_value_label.setFixedWidth(40)
-        contrast_top_layout.addWidget(self.contrast_top_value_label)
-
-        contrast_bottom_layout = QHBoxLayout()
-        left_layout.addLayout(contrast_bottom_layout)
-
-        contrast_bottom_label = QLabel("下方对比度:")
-        contrast_bottom_layout.addWidget(contrast_bottom_label)
-
-        self.contrast_bottom_slider = QSlider(Qt.Horizontal)
-        self.contrast_bottom_slider.setRange(0, 200)
-        self.contrast_bottom_slider.setValue(100)
-        self.contrast_bottom_slider.valueChanged.connect(self.on_contrast_bottom_changed)
-        contrast_bottom_layout.addWidget(self.contrast_bottom_slider)
-
-        self.contrast_bottom_value_label = QLabel("100%")
-        self.contrast_bottom_value_label.setFixedWidth(40)
-        contrast_bottom_layout.addWidget(self.contrast_bottom_value_label)
-
-        # ---- 上方点管理区域 ----
         self.setup_top_point_management(left_layout)
+        left_layout.addStretch()
+
+        # ----- 中部控制区域 -----
+        middle_pannel = QWidget(self)
+        middle_pannel.setFixedWidth(450)
+        middle_layout = QVBoxLayout(middle_pannel)
+        middle_layout.setContentsMargins(5, 5, 5, 5)
+        middle_layout.setSpacing(8)
+        root_layout.addWidget(middle_pannel)
 
         # ---- 下方点管理区域 ----
-        self.setup_bottom_point_management(left_layout)
+        self.setup_bottom_point_management(middle_layout)
 
         # 绑定回车键
         self.url_entry_bottom.returnPressed.connect(lambda: self.load_image("both"))
 
-        self.setup_export_section(left_layout)
+        self.setup_export_section(middle_layout)
 
-        left_layout.addStretch()
+        middle_layout.addStretch()
 
         # ----- 右侧图片显示区域 -----
         self.setup_image_display(root_layout)
@@ -257,6 +215,23 @@ class ImageViewerApp(QWidget):
         """)
         self.layer_list_widget.setSpacing(1)
         point_layout.addWidget(self.layer_list_widget)
+
+        # ---- 对比度控制 ----
+        contrast_top_layout = QHBoxLayout()
+        point_layout.addLayout(contrast_top_layout)
+
+        contrast_top_label = QLabel("上方对比度:")
+        contrast_top_layout.addWidget(contrast_top_label)
+
+        self.contrast_top_slider = QSlider(Qt.Horizontal)
+        self.contrast_top_slider.setRange(0, 200)
+        self.contrast_top_slider.setValue(100)
+        self.contrast_top_slider.valueChanged.connect(self.on_contrast_top_changed)
+        contrast_top_layout.addWidget(self.contrast_top_slider)
+
+        self.contrast_top_value_label = QLabel("100%")
+        self.contrast_top_value_label.setFixedWidth(40)
+        contrast_top_layout.addWidget(self.contrast_top_value_label)
 
         # ---- 点大小控制 ----
         size_layout = QHBoxLayout()
@@ -404,9 +379,42 @@ class ImageViewerApp(QWidget):
         """)
         point_layout = QVBoxLayout(point_group)
 
+        # ---- 侧面图压缩控制 ----
+        compress_layout = QHBoxLayout()
+        point_layout.addLayout(compress_layout)
+
+        compress_label = QLabel("侧面图压缩:")
+        compress_layout.addWidget(compress_label)
+
+        self.compress_slider = QSlider(Qt.Horizontal)
+        self.compress_slider.setRange(1, 100)
+        self.compress_slider.setValue(100)
+        self.compress_slider.valueChanged.connect(self.on_compress_changed)
+        compress_layout.addWidget(self.compress_slider)
+
+        self.compress_value_label = QLabel("100%")
+        self.compress_value_label.setFixedWidth(40)
+        compress_layout.addWidget(self.compress_value_label)
+
+        # ---- 对比度控制 ----
+        contrast_bottom_layout = QHBoxLayout()
+        point_layout.addLayout(contrast_bottom_layout)
+
+        contrast_bottom_label = QLabel("下方对比度:")
+        contrast_bottom_layout.addWidget(contrast_bottom_label)
+
+        self.contrast_bottom_slider = QSlider(Qt.Horizontal)
+        self.contrast_bottom_slider.setRange(0, 200)
+        self.contrast_bottom_slider.setValue(100)
+        self.contrast_bottom_slider.valueChanged.connect(self.on_contrast_bottom_changed)
+        contrast_bottom_layout.addWidget(self.contrast_bottom_slider)
+
+        self.contrast_bottom_value_label = QLabel("100%")
+        self.contrast_bottom_value_label.setFixedWidth(40)
+        contrast_bottom_layout.addWidget(self.contrast_bottom_value_label)
+
         # ---- 点大小控制 ----
         size_layout = QHBoxLayout()
-
         size_label = QLabel("点大小:")
         size_layout.addWidget(size_label)
 
@@ -419,7 +427,6 @@ class ImageViewerApp(QWidget):
         self.bottom_point_size_label = QLabel("5px")
         self.bottom_point_size_label.setFixedWidth(40)
         size_layout.addWidget(self.bottom_point_size_label)
-
         point_layout.addLayout(size_layout)
 
         # ---- 按钮行 ----
