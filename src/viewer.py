@@ -4,6 +4,7 @@ from PIL import Image, ImageDraw, ImageFont
 from PySide6.QtCore import Qt
 from PySide6.QtGui import QColor, QIntValidator
 from PySide6.QtWidgets import (
+    QCheckBox,
     QFrame,
     QGroupBox,
     QFileDialog,
@@ -74,6 +75,10 @@ class ImageViewerApp(QWidget):
         self.coord_y_edit = None
         self.jump_btn = None
         self.current_coord_label = None
+
+        # 点列表相关
+        self.show_point_numbers_checkbox = None
+        self.show_bottom_point_numbers_checkbox = None
 
         self.setup_ui()
         self.show_placeholders()
@@ -378,9 +383,29 @@ class ImageViewerApp(QWidget):
         point_layout.addLayout(button_layout)
 
         # 点列表
+        list_label_layout = QHBoxLayout()  # 改为水平布局
         list_label = QLabel("已记录的点:")
-        list_label.setStyleSheet("font-weight: bold; color: #555555; margin-top: 5px;")
-        point_layout.addWidget(list_label)
+        list_label.setStyleSheet("font-weight: bold; color: #555555; margin-top: 5px; font-size: 11px;")
+        list_label_layout.addWidget(list_label)
+
+        # 添加"显示序号"复选框
+        self.show_point_numbers_checkbox = QCheckBox("显示序号")
+        self.show_point_numbers_checkbox.setStyleSheet("""
+            QCheckBox {
+                font-size: 11px;
+                color: #555555;
+                margin-top: 5px;
+            }
+            QCheckBox::indicator {
+                width: 14px;
+                height: 14px;
+            }
+        """)
+        self.show_point_numbers_checkbox.stateChanged.connect(self.on_show_numbers_changed)
+        list_label_layout.addWidget(self.show_point_numbers_checkbox)
+        list_label_layout.addStretch()  # 添加弹性空间，让复选框靠右
+
+        point_layout.addLayout(list_label_layout)
 
         self.point_list_widget = QListWidget()
         self.point_list_widget.setStyleSheet("""
@@ -403,7 +428,7 @@ class ImageViewerApp(QWidget):
         point_layout.addWidget(self.point_list_widget)
 
         self.point_count_label = QLabel("总计: 0 个点")
-        self.point_count_label.setStyleSheet("color: #666666; font-size: 11px;")
+        self.point_count_label.setStyleSheet("color: #666666; font-size: 10px;")
         point_layout.addWidget(self.point_count_label)
 
         parent_layout.addWidget(point_group)
@@ -583,9 +608,29 @@ class ImageViewerApp(QWidget):
         point_layout.addLayout(button_layout)
 
         # 点列表
+        list_label_layout = QHBoxLayout()  # 改为水平布局
         list_label = QLabel("已记录的点 (显示原始坐标):")
-        list_label.setStyleSheet("font-weight: bold; color: #555555; margin-top: 5px;")
-        point_layout.addWidget(list_label)
+        list_label.setStyleSheet("font-weight: bold; color: #555555; margin-top: 5px; font-size: 11px;")
+        list_label_layout.addWidget(list_label)
+
+        # 添加"显示序号"复选框
+        self.show_bottom_point_numbers_checkbox = QCheckBox("显示序号")
+        self.show_bottom_point_numbers_checkbox.setStyleSheet("""
+            QCheckBox {
+                font-size: 11px;
+                color: #555555;
+                margin-top: 5px;
+            }
+            QCheckBox::indicator {
+                width: 14px;
+                height: 14px;
+            }
+        """)
+        self.show_bottom_point_numbers_checkbox.stateChanged.connect(self.on_bottom_show_numbers_changed)
+        list_label_layout.addWidget(self.show_bottom_point_numbers_checkbox)
+        list_label_layout.addStretch()  # 添加弹性空间，让复选框靠右
+
+        point_layout.addLayout(list_label_layout)
 
         self.bottom_point_list_widget = QListWidget()
         self.bottom_point_list_widget.setStyleSheet("""
@@ -608,7 +653,7 @@ class ImageViewerApp(QWidget):
         point_layout.addWidget(self.bottom_point_list_widget)
 
         self.bottom_point_count_label = QLabel("总计: 0 个点")
-        self.bottom_point_count_label.setStyleSheet("color: #666666; font-size: 11px;")
+        self.bottom_point_count_label.setStyleSheet("color: #666666; font-size: 10px;")
         point_layout.addWidget(self.bottom_point_count_label)
 
         parent_layout.addWidget(point_group)
@@ -1304,7 +1349,11 @@ class ImageViewerApp(QWidget):
 
         compress_ratio = self.controller.get_compress_ratio()
 
-        for x, y, color, size in points:
+        # 检查是否显示序号
+        show_numbers = self.show_bottom_point_numbers_checkbox.isChecked() if hasattr(self,
+                                                                                      'show_bottom_point_numbers_checkbox') else False
+
+        for i, (x, y, color, size) in enumerate(points, 1):  # 使用enumerate获取序号
             # 获取图片尺寸
             if self.controller.bottom_image is None:
                 return
@@ -1325,11 +1374,31 @@ class ImageViewerApp(QWidget):
             display_y = max(0, min(display_y, img_height - 1))
 
             radius = size // 2
+            # 绘制点
             draw.ellipse(
                 [(display_x - radius, display_y - radius),
                  (display_x + radius, display_y + radius)],
                 fill=color
             )
+
+            # 如果勾选了显示序号，在点旁边绘制数字
+            if show_numbers:
+                try:
+                    # 在点右上方绘制序号
+                    text = str(i)
+                    from PIL import ImageFont
+                    try:
+                        font = ImageFont.truetype("arial.ttf", 12)
+                    except:
+                        font = ImageFont.load_default()
+
+                    # 绘制文本背景（白色半透明，提高可读性）
+                    text_bbox = draw.textbbox((display_x + radius + 2, display_y - radius - 2), text, font=font)
+                    draw.rectangle(text_bbox, fill=(255, 255, 255, 200))
+                    # 绘制文本（使用黑色）
+                    draw.text((display_x + radius + 2, display_y - radius - 2), text, fill=(0, 0, 0), font=font)
+                except Exception as e:
+                    print(f"绘制下方序号失败: {e}")
 
     def setup_image_display(self, root_layout):
         """设置图片显示区域"""
@@ -1517,6 +1586,14 @@ class ImageViewerApp(QWidget):
         # 刷新下方图片显示
         self.switch_bottom_image_by_y(self.controller.current_y)
 
+    def on_show_numbers_changed(self, state):
+        """显示序号复选框状态变化"""
+        self.refresh_top_display()
+
+    def on_bottom_show_numbers_changed(self, state):
+        """下方显示序号复选框状态变化"""
+        self.refresh_bottom_image()
+
     def draw_crosshair(self, x_coord, y_coord):
         """绘制十字准星"""
         # 使用图层管理器合成图像
@@ -1540,7 +1617,7 @@ class ImageViewerApp(QWidget):
             line_y = 0
         draw.line([(0, line_y), (self.top_size - 1, line_y)], fill=(255, 0, 0), width=2)
 
-        # 绘制已记录的点
+        # 绘制已记录的点（包含序号）
         self.draw_recorded_points(draw)
 
         self.top_line_photo = self.set_label_image(self.top_image_label, composite)
@@ -1556,14 +1633,48 @@ class ImageViewerApp(QWidget):
         img_width = self.top_size
         img_height = self.top_size
 
-        for x, y, color, size in points:
+        # 检查是否显示序号
+        show_numbers = self.show_point_numbers_checkbox.isChecked() if hasattr(self,
+                                                                               'show_point_numbers_checkbox') else False
+
+        for i, (x, y, color, size) in enumerate(points, 1):  # 使用enumerate获取序号
             if 0 <= x < img_width and 0 <= y < img_height:
                 radius = size // 2
+                # 绘制点
                 draw.ellipse(
                     [(x - radius, y - radius),
                      (x + radius, y + radius)],
                     fill=color
                 )
+
+                # 如果勾选了显示序号，在点旁边绘制数字
+                if show_numbers:
+                    try:
+                        # 在点右上方绘制序号
+                        text = str(i)
+                        # 使用系统字体，或者使用PIL的ImageFont
+                        from PIL import ImageFont
+                        try:
+                            # 尝试加载一个字体
+                            font = ImageFont.truetype("arial.ttf", 12)
+                        except:
+                            # 如果找不到，使用默认字体
+                            font = ImageFont.load_default()
+
+                        # 绘制文本背景（白色半透明，提高可读性）
+                        text_bbox = draw.textbbox((x + radius + 2, y - radius - 2), text, font=font)
+                        draw.rectangle(text_bbox, fill=(255, 255, 255, 200))
+                        # 绘制文本（使用黑色）
+                        draw.text((x + radius + 2, y - radius - 2), text, fill=(0, 0, 0), font=font)
+                    except Exception as e:
+                        # 如果绘制文本失败，至少绘制一个简单的序号标记
+                        print(f"绘制序号失败: {e}")
+                        # 简单绘制一个小圆圈标记
+                        draw.ellipse(
+                            [(x + radius + 2, y - radius - 2),
+                             (x + radius + 8, y - radius + 4)],
+                            fill=(255, 255, 255)
+                        )
 
     def draw_bottom_line(self, x_coord):
         if self.controller.bottom_image is None:
@@ -1622,7 +1733,7 @@ class ImageViewerApp(QWidget):
                 mapped_x = max(0, min(mapped_x, self.controller.app.bottom_width - 1))
                 draw.line([(mapped_x, 0), (mapped_x, compressed_height - 1)], fill=(0, 255, 0), width=2)
 
-            # 绘制当前图片的下方点
+            # 绘制当前图片的下方点（包含序号）
             self.draw_bottom_recorded_points(draw)
 
             self.controller.bottom_line_image = img_copy
@@ -2075,26 +2186,40 @@ class ImageViewerApp(QWidget):
 
     def refresh_top_display(self):
         """刷新上方图片显示（使用图层管理器合成）"""
-        # 获取合成图像
-        composite = self.controller.render_top_image()
+        try:
+            # 获取合成图像
+            composite = self.controller.render_top_image()
 
-        # 如果有坐标，绘制十字准星
-        if self.controller.current_x is not None and self.controller.current_y is not None:
-            draw = ImageDraw.Draw(composite)
-            # 绘制十字准星
-            line_x = self.controller.current_x - 1
-            if line_x < 0:
-                line_x = 0
-            line_y = self.controller.current_y - 1
-            if line_y < 0:
-                line_y = 0
-            draw.line([(line_x, 0), (line_x, self.top_size - 1)], fill=(0, 255, 0), width=2)
-            draw.line([(0, line_y), (self.top_size - 1, line_y)], fill=(255, 0, 0), width=2)
-            # 绘制已记录的点
-            self.draw_recorded_points(draw)
+            if composite is None:
+                return
 
-        # 显示图片
-        self.top_photo = self.set_label_image(self.top_image_label, composite)
+            # 确保图片尺寸正确
+            if composite.size != (self.top_size, self.top_size):
+                composite = composite.resize((self.top_size, self.top_size), Image.Resampling.LANCZOS)
+
+            # 如果有坐标，绘制十字准星
+            if self.controller.current_x is not None and self.controller.current_y is not None:
+                draw = ImageDraw.Draw(composite)
+                # 绘制十字准星
+                line_x = self.controller.current_x - 1
+                if line_x < 0:
+                    line_x = 0
+                line_y = self.controller.current_y - 1
+                if line_y < 0:
+                    line_y = 0
+                draw.line([(line_x, 0), (line_x, self.top_size - 1)], fill=(0, 255, 0), width=2)
+                draw.line([(0, line_y), (self.top_size - 1, line_y)], fill=(255, 0, 0), width=2)
+                # 绘制已记录的点（包含序号）
+                self.draw_recorded_points(draw)
+            else:
+                # 即使没有十字准星，也要绘制点
+                draw = ImageDraw.Draw(composite)
+                self.draw_recorded_points(draw)
+
+            # 显示图片
+            self.top_photo = self.set_label_image(self.top_image_label, composite)
+        except Exception as e:
+            print(f"刷新显示错误: {e}")
 
     def import_json_format(self):
         """从JSON文件导入数据"""
