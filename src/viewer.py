@@ -2,7 +2,7 @@ import os
 
 from PIL import Image, ImageDraw, ImageFont
 from PySide6.QtCore import Qt
-from PySide6.QtGui import QColor
+from PySide6.QtGui import QColor, QIntValidator
 from PySide6.QtWidgets import (
     QFrame,
     QGroupBox,
@@ -68,6 +68,12 @@ class ImageViewerApp(QWidget):
         self.import_json_btn = None
         self.clear_before_import_btn = None
         self.export_info_label = None
+
+        # ... 原有代码 ...
+        self.coord_x_edit = None
+        self.coord_y_edit = None
+        self.jump_btn = None
+        self.current_coord_label = None
 
         self.setup_ui()
         self.show_placeholders()
@@ -249,6 +255,53 @@ class ImageViewerApp(QWidget):
         size_layout.addWidget(self.point_size_label)
 
         point_layout.addLayout(size_layout)
+
+        # ---- 坐标跳转控制 ----
+        coord_layout = QHBoxLayout()
+        coord_layout.setSpacing(5)
+
+        coord_label = QLabel("跳转到坐标:")
+        coord_layout.addWidget(coord_label)
+
+        # X坐标输入
+        self.coord_x_edit = QLineEdit()
+        self.coord_x_edit.setPlaceholderText("X")
+        self.coord_x_edit.setFixedWidth(40)
+        self.coord_x_edit.setValidator(QIntValidator(1, 512))  # 限制1-512
+        coord_layout.addWidget(self.coord_x_edit)
+
+        # Y坐标输入
+        self.coord_y_edit = QLineEdit()
+        self.coord_y_edit.setPlaceholderText("Y")
+        self.coord_y_edit.setFixedWidth(40)
+        self.coord_y_edit.setValidator(QIntValidator(1, 512))
+        coord_layout.addWidget(self.coord_y_edit)
+
+        # 跳转按钮
+        self.jump_btn = QPushButton("跳转")
+        self.jump_btn.setFixedHeight(24)
+        self.jump_btn.setStyleSheet("""
+            QPushButton {
+                background: #FF9800;
+                color: white;
+                padding: 2px 10px;
+                border: none;
+                border-radius: 3px;
+                font-weight: bold;
+            }
+            QPushButton:hover {
+                background: #F57C00;
+            }
+        """)
+        self.jump_btn.clicked.connect(self.jump_to_coordinate)
+        coord_layout.addWidget(self.jump_btn)
+
+        # 可选：添加一个"当前坐标"显示
+        self.current_coord_label = QLabel("当前: (--, --)")
+        self.current_coord_label.setStyleSheet("color: #888888; font-size: 10px;")
+        coord_layout.addWidget(self.current_coord_label)
+
+        point_layout.addLayout(coord_layout)
 
         # ---- 按钮行 ----
         button_layout = QHBoxLayout()
@@ -1322,6 +1375,49 @@ class ImageViewerApp(QWidget):
 
         bottom_layout.addWidget(self.bottom_scroll_area)
         right_layout.addWidget(bottom_frame, 1)
+
+    def jump_to_coordinate(self):
+        """从输入框读取坐标并跳转"""
+        try:
+            x_text = self.coord_x_edit.text().strip()
+            y_text = self.coord_y_edit.text().strip()
+
+            if not x_text or not y_text:
+                self.show_warning("提示", "请输入X和Y坐标")
+                return
+
+            x = int(x_text)
+            y = int(y_text)
+
+            # 检查是否在有效范围内（图片尺寸512x512）
+            if x < 1 or x > 512 or y < 1 or y > 512:
+                self.show_warning("提示", "坐标范围应为 1 到 512")
+                return
+
+            # 更新坐标
+            self.controller.set_coordinate(x, y)
+
+            # 刷新上方图片显示（绘制十字准星）
+            self.draw_crosshair(x, y)
+
+            # 切换下方图片到对应Y坐标
+            self.switch_bottom_image_by_y(y)
+
+            # 启用记录按钮
+            self.record_point_btn.setEnabled(True)
+
+            # 更新当前坐标标签
+            self.current_coord_label.setText(f"当前: ({x}, {y})")
+
+            # 清空输入框
+            self.coord_x_edit.clear()
+            self.coord_y_edit.clear()
+
+            self.show_status_message(f"已跳转到坐标 ({x}, {y})")
+
+        except ValueError:
+            self.show_warning("提示", "请输入有效的整数坐标")
+
     # ========== 颜色选择功能 ==========
 
     def choose_point_color(self):
@@ -1430,6 +1526,8 @@ class ImageViewerApp(QWidget):
             return
 
         draw = ImageDraw.Draw(composite)
+        if x_coord is None or y_coord is None:
+            return
 
         # 绘制十字准星
         line_x = x_coord - 1
@@ -1782,6 +1880,9 @@ class ImageViewerApp(QWidget):
 
         # 更新坐标
         self.controller.set_coordinate(original_x, original_y)
+
+        if hasattr(self, 'current_coord_label') and self.current_coord_label:
+            self.current_coord_label.setText(f"当前: ({original_x}, {original_y})")
 
         # 刷新显示 - 使用新的合成方法
         self.refresh_top_display()
