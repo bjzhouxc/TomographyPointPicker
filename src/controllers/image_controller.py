@@ -109,8 +109,13 @@ class ImageController:
                     self.top_offset_y = display_info["offset_y"]
 
             # 加载B-scan
-            bscan_path = os.path.join(base_path, "B-scan_PixelRatio")
-            if not os.path.exists(bscan_path):
+            bscan_path_exist_flag = False
+            for bscan_name in ("B-scan_PixelRatio", "PixRatio"):
+                bscan_path = os.path.join(base_path, bscan_name)
+                if os.path.exists(bscan_path):
+                    bscan_path_exist_flag = True
+                    break
+            if not bscan_path_exist_flag:
                 self.app.show_error("错误", f"找不到B-scan_PixelRatio文件夹：\n{bscan_path}")
                 return False
 
