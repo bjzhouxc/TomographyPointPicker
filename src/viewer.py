@@ -2197,6 +2197,9 @@ class ImageViewerApp(QWidget):
             if composite.size != (self.top_size, self.top_size):
                 composite = composite.resize((self.top_size, self.top_size), Image.Resampling.LANCZOS)
 
+            if composite.mode != 'RGB':
+                composite = composite.convert('RGB')
+
             # 如果有坐标，绘制十字准星
             if self.controller.current_x is not None and self.controller.current_y is not None:
                 draw = ImageDraw.Draw(composite)

@@ -136,6 +136,9 @@ class ImageLayerManager:
             if not layer.visible:
                 continue
 
+            if layer.image.mode != result.mode:
+                layer.image = layer.image.convert(result.mode)
+
             if layer.opacity >= 100:
                 # 完全不透明，直接覆盖
                 result = layer.image.copy()
