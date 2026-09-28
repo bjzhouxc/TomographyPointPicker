@@ -125,7 +125,7 @@ class ImageLayerManager:
         # 从底座开始
         if self.base_image:
             result = self.base_image.copy()
-            if result.mode == "RGBA":
+            if result.mode != 'RGB':
                 result = result.convert('RGB')
         else:
             # 如果没有底座，返回空白图
