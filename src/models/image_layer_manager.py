@@ -136,8 +136,8 @@ class ImageLayerManager:
             if not layer.visible:
                 continue
 
-            if layer.image.mode != result.mode:
-                layer.image = layer.image.convert(result.mode)
+            if layer.image.mode != "RGB":
+                layer.image = layer.image.convert("RGB")
 
             if layer.opacity >= 100:
                 # 完全不透明，直接覆盖

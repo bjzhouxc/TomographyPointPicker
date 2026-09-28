@@ -57,6 +57,9 @@ class ImageController:
         try:
             original_image = Image.open(image_path)
 
+            if original_image.mode != 'RGB':
+                original_image = original_image.convert('RGB')
+
             # 获取文件名（用于显示）和完整路径（用于导出）
             file_name = os.path.basename(image_path)
             full_path = os.path.abspath(image_path)
